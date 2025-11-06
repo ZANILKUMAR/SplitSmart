@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "212421823653",
+    "project_id": "smartsplit-zanil",
+    "storage_bucket": "smartsplit-zanil.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:212421823653:android:c7923b19f4145b4a45914c",
+        "android_client_info": {
+          "package_name": "com.example.smartsplit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDe17BUuijkQf0ViDacGLsaW9YVk2O_0A8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
