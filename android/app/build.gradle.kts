@@ -25,6 +25,7 @@ android {
         applicationId = "com.example.smartsplit"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // IMPORTANT: Do not change minSdk back to minSdkVersion - it causes build errors
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
