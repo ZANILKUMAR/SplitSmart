@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SmartSplit',
+      title: 'Smart Split',
       theme: AppTheme.theme,
       home: const LoginScreen(),
       debugShowCheckedModeBanner: false,
