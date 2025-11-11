@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/group_service.dart';
 import '../../constants/currencies.dart';
+import '../../models/UserModel.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -14,8 +16,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _searchController = TextEditingController();
   final _groupService = GroupService();
+  final _firestore = FirebaseFirestore.instance;
   bool _isLoading = false;
+  bool _isSearching = false;
+
+  List<UserModel> _selectedMembers = [];
+  List<UserModel> _searchResults = [];
 
   // Group icons
   final List<IconData> _groupIcons = [
@@ -52,7 +60,87 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _searchUsers(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+
+    try {
+      // Search by email
+      final emailQuery = await _firestore
+          .collection('users')
+          .where('email', isGreaterThanOrEqualTo: query.toLowerCase())
+          .where('email', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
+          .limit(10)
+          .get();
+
+      // Search by name
+      final nameQuery = await _firestore
+          .collection('users')
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where('name', isLessThanOrEqualTo: '$query\uf8ff')
+          .limit(10)
+          .get();
+
+      final emailResults = emailQuery.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
+          .toList();
+
+      final nameResults = nameQuery.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
+          .toList();
+
+      // Combine and remove duplicates
+      final allResults = <String, UserModel>{};
+      for (var user in emailResults) {
+        allResults[user.uid] = user;
+      }
+      for (var user in nameResults) {
+        allResults[user.uid] = user;
+      }
+
+      // Filter out current user and already selected members
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final filtered = allResults.values
+          .where(
+            (user) =>
+                user.uid != currentUser?.uid &&
+                !_selectedMembers.any((m) => m.uid == user.uid),
+          )
+          .toList();
+
+      setState(() {
+        _searchResults = filtered;
+        _isSearching = false;
+      });
+    } catch (e) {
+      print('Error searching users: $e');
+      setState(() => _isSearching = false);
+    }
+  }
+
+  void _addMember(UserModel user) {
+    setState(() {
+      _selectedMembers.add(user);
+      _searchResults.remove(user);
+      _searchController.clear();
+    });
+  }
+
+  void _removeMember(UserModel user) {
+    setState(() {
+      _selectedMembers.remove(user);
+    });
   }
 
   Future<void> _createGroup() async {
@@ -82,6 +170,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
       print('Group created successfully with ID: $groupId');
 
+      // Add selected members to the group
+      if (_selectedMembers.isNotEmpty) {
+        for (var member in _selectedMembers) {
+          await _groupService.addMember(groupId, member.uid, addedBy: user.uid);
+        }
+        print('Added ${_selectedMembers.length} members to group');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -95,7 +191,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     } catch (e, stackTrace) {
       print('Error creating group: $e');
       print('Stack trace: $stackTrace');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -117,10 +213,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Group'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Create Group'), elevation: 0),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -136,16 +229,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   decoration: BoxDecoration(
                     color: _selectedColor.withOpacity(0.2),
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _selectedColor,
-                      width: 3,
-                    ),
+                    border: Border.all(color: _selectedColor, width: 3),
                   ),
-                  child: Icon(
-                    _selectedIcon,
-                    size: 60,
-                    color: _selectedColor,
-                  ),
+                  child: Icon(_selectedIcon, size: 60, color: _selectedColor),
                 ),
               ),
               const SizedBox(height: 24),
@@ -225,12 +311,196 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               ),
               const SizedBox(height: 24),
 
+              // Add Members Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Add Members (Optional)',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (_selectedMembers.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_selectedMembers.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Search Field
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search by name or email',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchResults = [];
+                            });
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: _searchUsers,
+              ),
+              const SizedBox(height: 8),
+
+              // Search Results
+              if (_isSearching)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_searchResults.isNotEmpty)
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _searchResults.length,
+                    itemBuilder: (context, index) {
+                      final user = _searchResults[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: Text(
+                            user.name[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        title: Text(user.name),
+                        subtitle: Text(user.email),
+                        trailing: IconButton(
+                          icon: const Icon(
+                            Icons.add_circle,
+                            color: Colors.blue,
+                          ),
+                          onPressed: () => _addMember(user),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+              // Selected Members List
+              if (_selectedMembers.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Selected Members',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[900],
+                            ),
+                          ),
+                          Text(
+                            '${_selectedMembers.length} member${_selectedMembers.length > 1 ? 's' : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...(_selectedMembers.map((user) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: Colors.green,
+                                child: Text(
+                                  user.name[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      user.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      user.email,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.remove_circle,
+                                  color: Colors.red[400],
+                                ),
+                                onPressed: () => _removeMember(user),
+                              ),
+                            ],
+                          ),
+                        );
+                      })),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+
               // Choose Icon Section
               Text(
                 'Choose Icon',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -259,7 +529,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               : Colors.grey[200],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: isSelected ? _selectedColor : Colors.grey[300]!,
+                            color: isSelected
+                                ? _selectedColor
+                                : Colors.grey[300]!,
                             width: isSelected ? 2 : 1,
                           ),
                         ),
@@ -278,9 +550,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               // Choose Color Section
               Text(
                 'Choose Color',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -338,8 +610,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(
@@ -359,25 +632,18 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 decoration: BoxDecoration(
                   color: Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.blue.withOpacity(0.3),
-                  ),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.blue[700],
-                      size: 20,
-                    ),
+                    Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'You can add members to the group after creating it.',
-                        style: TextStyle(
-                          color: Colors.blue[900],
-                          fontSize: 13,
-                        ),
+                        _selectedMembers.isEmpty
+                            ? 'You can add members now or after creating the group.'
+                            : 'Selected members will be added when you create the group.',
+                        style: TextStyle(color: Colors.blue[900], fontSize: 13),
                       ),
                     ),
                   ],

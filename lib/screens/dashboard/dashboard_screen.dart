@@ -15,15 +15,16 @@ import '../groups/create_group_screen.dart';
 import '../groups/group_details_screen.dart';
 import '../expenses/add_expense_screen.dart';
 import '../settlements/record_settlement_screen.dart';
-import '../test/test_firebase_screen.dart';
+import '../profile/profile_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../settings/theme_settings_screen.dart';
+import '../../services/notification_service.dart';
+import '../../constants/currencies.dart';
 
 class DashboardScreen extends StatefulWidget {
   final UserModel user;
 
-  const DashboardScreen({
-    super.key,
-    required this.user,
-  });
+  const DashboardScreen({super.key, required this.user});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -34,6 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _groupService = GroupService();
   final _expenseService = ExpenseService();
   final _settlementService = SettlementService();
+  final _notificationService = NotificationService();
   int _selectedIndex = 0;
 
   @override
@@ -42,25 +44,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('SmartSplit'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // TODO: Implement notifications
+          StreamBuilder<int>(
+            stream: _notificationService.getUnreadNotificationsCount(
+              widget.user.uid,
+            ),
+            builder: (context, snapshot) {
+              final unreadCount = snapshot.data ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
             },
           ),
           PopupMenuButton<String>(
             onSelected: _handleMenuSelect,
             itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'test',
-                child: Row(
-                  children: [
-                    Icon(Icons.bug_report, size: 20),
-                    SizedBox(width: 8),
-                    Text('Test Firebase'),
-                  ],
-                ),
-              ),
               const PopupMenuItem<String>(
                 value: 'profile',
                 child: Row(
@@ -68,6 +102,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Icon(Icons.person, size: 20),
                     SizedBox(width: 8),
                     Text('Profile'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'theme',
+                child: Row(
+                  children: [
+                    Icon(Icons.palette, size: 20),
+                    SizedBox(width: 8),
+                    Text('Theme Settings'),
                   ],
                 ),
               ),
@@ -98,14 +142,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         currentIndex: _selectedIndex,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.group),
-            label: 'Groups',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Groups'),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
             label: 'Expenses',
@@ -127,16 +165,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _handleMenuSelect(String value) async {
     switch (value) {
-      case 'test':
+      case 'profile':
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => const TestFirebaseScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const ProfileScreen()),
         );
         break;
-      case 'profile':
-        // TODO: Implement profile navigation
+      case 'theme':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ThemeSettingsScreen()),
+        );
         break;
       case 'logout':
         await _handleLogout();
@@ -149,17 +188,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await _authService.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const LoginScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
           (route) => false,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to logout')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to logout')));
       }
     }
   }
@@ -191,7 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _showGroupSelectionDialog() async {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    
+
     final groups = await _groupService.getUserGroups(currentUserId ?? '').first;
 
     if (!mounted) return;
@@ -221,7 +258,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: groups.map((group) {
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                  backgroundColor: Theme.of(
+                    context,
+                  ).primaryColor.withOpacity(0.1),
                   child: Icon(
                     Icons.group,
                     color: Theme.of(context).primaryColor,
@@ -257,6 +296,250 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _showAddMemberDialog() async {
+    final TextEditingController searchController = TextEditingController();
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController phoneController = TextEditingController();
+    List<UserModel> searchResults = [];
+    bool showCreateForm = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add Member'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Search Field
+                TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    labelText: 'Search by name or email',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: (value) async {
+                    if (value.isEmpty) {
+                      setState(() => searchResults = []);
+                      return;
+                    }
+
+                    final users = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where('email', isGreaterThanOrEqualTo: value)
+                        .where('email', isLessThan: '${value}z')
+                        .limit(5)
+                        .get();
+
+                    final nameUsers = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where('name', isGreaterThanOrEqualTo: value)
+                        .where('name', isLessThan: '${value}z')
+                        .limit(5)
+                        .get();
+
+                    final Set<String> seenIds = {};
+                    final List<UserModel> results = [];
+
+                    for (var doc in [...users.docs, ...nameUsers.docs]) {
+                      if (!seenIds.contains(doc.id)) {
+                        seenIds.add(doc.id);
+                        final data = doc.data();
+                        results.add(
+                          UserModel(
+                            uid: doc.id,
+                            email: data['email'] ?? '',
+                            name: data['name'] ?? '',
+                            phoneNumber: data['phoneNumber'] ?? '',
+                          ),
+                        );
+                      }
+                    }
+
+                    setState(() => searchResults = results);
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Search Results
+                if (searchResults.isNotEmpty)
+                  SizedBox(
+                    height: 200,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: searchResults.length,
+                      itemBuilder: (context, index) {
+                        final user = searchResults[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            child: Text(user.name[0].toUpperCase()),
+                          ),
+                          title: Text(user.name),
+                          subtitle: Text(user.email),
+                          onTap: () {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${user.name} is already a user'),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                // Create New Member Section
+                const Divider(height: 32),
+                if (!showCreateForm) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => setState(() => showCreateForm = true),
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Create New Member'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const Text(
+                    'Create New Member',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name *',
+                      prefixIcon: const Icon(Icons.person),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    decoration: InputDecoration(
+                      labelText: 'Email *',
+                      prefixIcon: const Icon(Icons.email),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    decoration: InputDecoration(
+                      labelText: 'Mobile Number *',
+                      prefixIcon: const Icon(Icons.phone),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              setState(() => showCreateForm = false),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            if (nameController.text.isEmpty ||
+                                emailController.text.isEmpty ||
+                                phoneController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please fill all required fields',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            // Create temporary password
+                            final tempPassword =
+                                'Temp@${DateTime.now().millisecondsSinceEpoch}';
+
+                            try {
+                              // Create user in Firebase Auth
+                              final userCredential = await FirebaseAuth.instance
+                                  .createUserWithEmailAndPassword(
+                                    email: emailController.text.trim(),
+                                    password: tempPassword,
+                                  );
+
+                              // Create user document
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(userCredential.user!.uid)
+                                  .set({
+                                    'name': nameController.text.trim(),
+                                    'email': emailController.text.trim(),
+                                    'phoneNumber': phoneController.text.trim(),
+                                    'createdAt': FieldValue.serverTimestamp(),
+                                  });
+
+                              if (!context.mounted) return;
+
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${nameController.text} added successfully!',
+                                  ),
+                                ),
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: ${e.toString()}'),
+                                ),
+                              );
+                            }
+                          },
+                          child: const Text('Create'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            if (!showCreateForm)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHomeTab() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
@@ -274,9 +557,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     CircleAvatar(
                       radius: 30,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).primaryColor.withOpacity(0.1),
                       child: Text(
-                        widget.user.name.isNotEmpty ? widget.user.name[0].toUpperCase() : '?',
+                        widget.user.name.isNotEmpty
+                            ? widget.user.name[0].toUpperCase()
+                            : '?',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -298,9 +585,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           Text(
                             widget.user.name,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -313,126 +599,306 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 16),
 
+        // Quick Actions
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CreateGroupScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.group_add),
+                label: const Text('Add Group'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _showAddMemberDialog(),
+                icon: const Icon(Icons.person_add),
+                label: const Text('Add Member'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
         // Balance Summary
-        StreamBuilder<List<ExpenseModel>>(
-          stream: _expenseService.getUserExpenses(currentUserId ?? ''),
-          builder: (context, expenseSnapshot) {
-            if (!expenseSnapshot.hasData) {
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Your Balance',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: const [
-                          _SummaryItem(
-                            title: 'You owe',
-                            amount: '\$0.00',
-                            color: Colors.red,
+        StreamBuilder<List<GroupModel>>(
+          stream: _groupService.getUserGroups(currentUserId ?? ''),
+          builder: (context, groupSnapshot) {
+            return StreamBuilder<List<ExpenseModel>>(
+              stream: _expenseService.getUserExpenses(currentUserId ?? ''),
+              builder: (context, expenseSnapshot) {
+                if (!expenseSnapshot.hasData) {
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Your Balance',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          _SummaryItem(
-                            title: 'You are owed',
-                            amount: '\$0.00',
-                            color: Colors.green,
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: const [
+                              _SummaryItem(
+                                title: 'You owe',
+                                amount: '\$0.00',
+                                color: Colors.red,
+                              ),
+                              _SummaryItem(
+                                title: 'You are owed',
+                                amount: '\$0.00',
+                                color: Colors.green,
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            final expenses = expenseSnapshot.data ?? [];
-            
-            // Calculate user's total balance across all groups
-            double youOwe = 0.0;
-            double youAreOwed = 0.0;
-
-            final Map<String, List<ExpenseModel>> expensesByGroup = {};
-            for (var expense in expenses) {
-              if (!expensesByGroup.containsKey(expense.groupId)) {
-                expensesByGroup[expense.groupId] = [];
-              }
-              expensesByGroup[expense.groupId]!.add(expense);
-            }
-
-            for (var groupExpenses in expensesByGroup.values) {
-              final balances = <String, double>{};
-              for (var expense in groupExpenses) {
-                final shareAmount = expense.getShareAmount();
-                balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
-                for (var personId in expense.splitBetween) {
-                  balances[personId] = (balances[personId] ?? 0) - shareAmount;
+                    ),
+                  );
                 }
-              }
-              
-              final myBalance = balances[currentUserId] ?? 0.0;
-              if (myBalance < 0) {
-                youOwe += -myBalance;
-              } else if (myBalance > 0) {
-                youAreOwed += myBalance;
-              }
-            }
 
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Your Balance',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryItem(
-                          title: 'You owe',
-                          amount: '\$${youOwe.toStringAsFixed(2)}',
-                          color: Colors.red,
+                final expenses = expenseSnapshot.data ?? [];
+                final activeGroups = groupSnapshot.data ?? [];
+                final activeGroupIds = activeGroups.map((g) => g.id).toSet();
+
+                // Filter out expenses from deleted groups
+                final activeExpenses = expenses
+                    .where((e) => activeGroupIds.contains(e.groupId))
+                    .toList();
+
+                final Map<String, List<ExpenseModel>> expensesByGroup = {};
+                for (var expense in activeExpenses) {
+                  if (!expensesByGroup.containsKey(expense.groupId)) {
+                    expensesByGroup[expense.groupId] = [];
+                  }
+                  expensesByGroup[expense.groupId]!.add(expense);
+                }
+
+                // Map groups to their currencies
+                final Map<String, String> groupCurrencies = {};
+                for (var group in activeGroups) {
+                  groupCurrencies[group.id] = group.currency;
+                }
+
+                // Get settlements to include in balance calculation
+                return StreamBuilder<List<SettlementModel>>(
+                  stream: _settlementService.getUserSettlements(
+                    currentUserId ?? '',
+                  ),
+                  builder: (context, settlementSnapshot) {
+                    final allSettlements = settlementSnapshot.data ?? [];
+
+                    // Re-initialize maps inside settlement StreamBuilder
+                    final Map<String, double> youOweByCurrency = {};
+                    final Map<String, double> youAreOwedByCurrency = {};
+
+                    // Group settlements by groupId
+                    final Map<String, List<SettlementModel>>
+                    settlementsByGroup = {};
+                    for (var settlement in allSettlements) {
+                      if (!settlementsByGroup.containsKey(settlement.groupId)) {
+                        settlementsByGroup[settlement.groupId] = [];
+                      }
+                      settlementsByGroup[settlement.groupId]!.add(settlement);
+                    }
+
+                    for (var entry in expensesByGroup.entries) {
+                      final groupId = entry.key;
+                      final groupExpenses = entry.value;
+                      final currency = groupCurrencies[groupId] ?? 'USD';
+                      final groupSettlements =
+                          settlementsByGroup[groupId] ?? [];
+
+                      final balances = <String, double>{};
+                      for (var expense in groupExpenses) {
+                        balances[expense.paidBy] =
+                            (balances[expense.paidBy] ?? 0) + expense.amount;
+                        for (var personId in expense.splitBetween) {
+                          final shareAmount = expense.getShareForUser(personId);
+                          balances[personId] =
+                              (balances[personId] ?? 0) - shareAmount;
+                        }
+                      }
+
+                      // Apply settlements to balances
+                      for (var settlement in groupSettlements) {
+                        balances[settlement.paidBy] =
+                            (balances[settlement.paidBy] ?? 0) +
+                            settlement.amount;
+                        balances[settlement.paidTo] =
+                            (balances[settlement.paidTo] ?? 0) -
+                            settlement.amount;
+                      }
+
+                      final myBalance = balances[currentUserId] ?? 0.0;
+                      if (myBalance < 0) {
+                        youOweByCurrency[currency] =
+                            (youOweByCurrency[currency] ?? 0) + (-myBalance);
+                      } else if (myBalance > 0) {
+                        youAreOwedByCurrency[currency] =
+                            (youAreOwedByCurrency[currency] ?? 0) + myBalance;
+                      }
+                    }
+
+                    // Determine display format based on number of currencies
+                    final allCurrencies = {
+                      ...youOweByCurrency.keys,
+                      ...youAreOwedByCurrency.keys,
+                    }.toList();
+                    final bool multipleCurrencies = allCurrencies.length > 1;
+
+                    // Calculate totals (for single currency or primary display)
+                    String oweDisplay, owedDisplay, totalDisplay;
+                    Color totalColor;
+
+                    if (multipleCurrencies) {
+                      // Show "Multiple" for mixed currencies
+                      oweDisplay = youOweByCurrency.isEmpty ? '0' : 'Multiple';
+                      owedDisplay = youAreOwedByCurrency.isEmpty
+                          ? '0'
+                          : 'Multiple';
+                      totalDisplay = 'Multiple Currencies';
+                      totalColor = Colors.grey;
+                    } else if (allCurrencies.isNotEmpty) {
+                      // Single currency - show with proper symbol
+                      final currency = allCurrencies.first;
+                      final youOwe = youOweByCurrency[currency] ?? 0.0;
+                      final youAreOwed = youAreOwedByCurrency[currency] ?? 0.0;
+                      final totalBalance = youAreOwed - youOwe;
+
+                      oweDisplay = AppConstants.formatAmount(youOwe, currency);
+                      owedDisplay = AppConstants.formatAmount(
+                        youAreOwed,
+                        currency,
+                      );
+                      totalDisplay = totalBalance >= 0
+                          ? '+${AppConstants.formatAmount(totalBalance, currency)}'
+                          : AppConstants.formatAmount(totalBalance, currency);
+                      totalColor = totalBalance >= 0
+                          ? Colors.green
+                          : Colors.red;
+                    } else {
+                      // No balances
+                      oweDisplay = '\$0.00';
+                      owedDisplay = '\$0.00';
+                      totalDisplay = '\$0.00';
+                      totalColor = Colors.grey;
+                    }
+
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Your Balance',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _SummaryItem(
+                                  title: 'You owe',
+                                  amount: oweDisplay,
+                                  color: Colors.red,
+                                ),
+                                _SummaryItem(
+                                  title: 'You are owed',
+                                  amount: owedDisplay,
+                                  color: Colors.green,
+                                ),
+                              ],
+                            ),
+                            if (multipleCurrencies) ...[
+                              const SizedBox(height: 12),
+                              // Show breakdown by currency
+                              ...allCurrencies.map((currency) {
+                                final owe = youOweByCurrency[currency] ?? 0.0;
+                                final owed =
+                                    youAreOwedByCurrency[currency] ?? 0.0;
+                                if (owe == 0 && owed == 0)
+                                  return const SizedBox.shrink();
+
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      if (owe > 0) ...[
+                                        Text(
+                                          'Owe ${AppConstants.formatAmount(owe, currency)}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (owed > 0)
+                                        Text(
+                                          'Owed ${AppConstants.formatAmount(owed, currency)}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.green,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                            const SizedBox(height: 16),
+                            const Divider(),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'Total Balance: ',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                                Text(
+                                  totalDisplay,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: totalColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        _SummaryItem(
-                          title: 'You are owed',
-                          amount: '\$${youAreOwed.toStringAsFixed(2)}',
-                          color: Colors.green,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Total Balance: ',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                        Text(
-                          (youAreOwed - youOwe) >= 0
-                              ? '+\$${(youAreOwed - youOwe).toStringAsFixed(2)}'
-                              : '-\$${(youOwe - youAreOwed).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: (youAreOwed - youOwe) >= 0
-                                ? Colors.green
-                                : Colors.red,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                      ),
+                    );
+                  },
+                );
+              },
             );
           },
         ),
@@ -447,7 +913,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
 
             final groups = groupSnapshot.data ?? [];
-            
+
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -459,7 +925,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         const Text(
                           'Your Groups',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         Text(
                           '${groups.length}',
@@ -476,10 +945,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       groups.isEmpty
                           ? 'Create your first group to start splitting expenses'
                           : 'Total members: ${groups.fold<int>(0, (sum, g) => sum + g.members.length)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -495,10 +961,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Text(
               'Recent Activity',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             TextButton(
               onPressed: () {
@@ -539,7 +1002,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      Icon(Icons.receipt_long, size: 48, color: Colors.grey[400]),
+                      Icon(
+                        Icons.receipt_long,
+                        size: 48,
+                        color: Colors.grey[400],
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'No expenses yet',
@@ -563,14 +1030,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return Column(
               children: recentExpenses.map((expense) {
                 return StreamBuilder<GroupModel?>(
-                  stream: Stream.fromFuture(_groupService.getGroup(expense.groupId)),
+                  stream: Stream.fromFuture(
+                    _groupService.getGroup(expense.groupId),
+                  ),
                   builder: (context, groupSnapshot) {
-                    final groupName = groupSnapshot.data?.name ?? 'Loading...';
-                    
+                    final group = groupSnapshot.data;
+
+                    // Skip if group is deleted
+                    if (groupSnapshot.connectionState == ConnectionState.done &&
+                        group == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final groupName = group?.name ?? 'Loading...';
+                    final currency = group?.currency ?? 'USD';
+
                     return Card(
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
                           child: Icon(
                             Icons.receipt,
                             color: Theme.of(context).primaryColor,
@@ -585,11 +1065,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Text(
                               groupName,
-                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[600],
+                              ),
                             ),
                             Text(
                               '${expense.date.day}/${expense.date.month}/${expense.date.year}',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[500],
+                              ),
                             ),
                           ],
                         ),
@@ -598,14 +1084,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '\$${expense.amount.toStringAsFixed(2)}',
+                              AppConstants.formatAmount(
+                                expense.amount,
+                                currency,
+                              ),
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
-                              expense.paidBy == currentUserId ? 'You paid' : 'Split',
+                              expense.paidBy == currentUserId
+                                  ? 'You paid'
+                                  : 'Split',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: expense.paidBy == currentUserId
@@ -619,9 +1110,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => GroupDetailsScreen(
-                                groupId: expense.groupId,
-                              ),
+                              builder: (context) =>
+                                  GroupDetailsScreen(groupId: expense.groupId),
                             ),
                           );
                         },
@@ -644,173 +1134,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildExpensesTab() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-    return StreamBuilder<List<ExpenseModel>>(
-      stream: _expenseService.getUserExpenses(currentUserId ?? ''),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return StreamBuilder<List<GroupModel>>(
+      stream: _groupService.getUserGroups(currentUserId ?? ''),
+      builder: (context, groupSnapshot) {
+        if (groupSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error, size: 64, color: Colors.red[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading expenses',
-                    style: TextStyle(fontSize: 18, color: Colors.red[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
+        final groups = groupSnapshot.data ?? [];
+        final activeGroupIds = groups.map((g) => g.id).toSet();
 
-        final expenses = snapshot.data ?? [];
+        return StreamBuilder<List<ExpenseModel>>(
+          stream: _expenseService.getUserExpenses(currentUserId ?? ''),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        if (expenses.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.receipt_long, size: 80, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No expenses yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Create a group and add expenses to get started',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() => _selectedIndex = 1); // Switch to Groups tab
-                    },
-                    icon: const Icon(Icons.group),
-                    label: const Text('View Groups'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(200, 48),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        // Group expenses by month
-        final Map<String, List<ExpenseModel>> expensesByMonth = {};
-        for (var expense in expenses) {
-          final monthKey = '${expense.date.month}/${expense.date.year}';
-          if (!expensesByMonth.containsKey(monthKey)) {
-            expensesByMonth[monthKey] = [];
-          }
-          expensesByMonth[monthKey]!.add(expense);
-        }
-
-        final sortedMonths = expensesByMonth.keys.toList()
-          ..sort((a, b) {
-            final aParts = a.split('/');
-            final bParts = b.split('/');
-            final aDate = DateTime(int.parse(aParts[1]), int.parse(aParts[0]));
-            final bDate = DateTime(int.parse(bParts[1]), int.parse(bParts[0]));
-            return bDate.compareTo(aDate);
-          });
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: sortedMonths.length + 1, // +1 for header
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              // Summary header
-              final totalExpenses = expenses.length;
-              final totalAmount = expenses.fold<double>(
-                0,
-                (sum, e) => sum + (e.paidBy == currentUserId ? e.amount : 0),
-              );
-
-              return Card(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+            if (snapshot.hasError) {
+              return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'All Expenses',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
-                      ),
+                      Icon(Icons.error, size: 64, color: Colors.red[400]),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          Column(
-                            children: [
-                              Text(
-                                '$totalExpenses',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              Text(
-                                'Total Expenses',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            height: 50,
-                            width: 1,
-                            color: Colors.grey[300],
-                          ),
-                          Column(
-                            children: [
-                              Text(
-                                '\$${totalAmount.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              Text(
-                                'You Paid',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      Text(
+                        'Error loading expenses',
+                        style: TextStyle(fontSize: 18, color: Colors.red[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        snapshot.error.toString(),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -818,106 +1176,343 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             }
 
-            final monthKey = sortedMonths[index - 1];
-            final monthExpenses = expensesByMonth[monthKey]!;
-            final monthParts = monthKey.split('/');
-            final monthNames = [
-              '', 'January', 'February', 'March', 'April', 'May', 'June',
-              'July', 'August', 'September', 'October', 'November', 'December'
-            ];
-            final monthName = '${monthNames[int.parse(monthParts[0])]} ${monthParts[1]}';
+            final allExpenses = snapshot.data ?? [];
+            // Filter out expenses from deleted groups
+            final expenses = allExpenses
+                .where((expense) => activeGroupIds.contains(expense.groupId))
+                .toList();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Text(
-                    monthName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+            if (expenses.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.receipt_long,
+                        size: 80,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No expenses yet',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Create a group and add expenses to get started',
+                        style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(
+                            () => _selectedIndex = 1,
+                          ); // Switch to Groups tab
+                        },
+                        icon: const Icon(Icons.group),
+                        label: const Text('View Groups'),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(200, 48),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                ...monthExpenses.map((expense) {
-                  return StreamBuilder<GroupModel?>(
-                    stream: Stream.fromFuture(_groupService.getGroup(expense.groupId)),
-                    builder: (context, groupSnapshot) {
-                      final groupName = groupSnapshot.data?.name ?? 'Loading...';
+              );
+            }
 
-                      return Card(
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                            child: Icon(
-                              Icons.receipt,
+            // Group expenses by month
+            final Map<String, List<ExpenseModel>> expensesByMonth = {};
+            for (var expense in expenses) {
+              final monthKey = '${expense.date.month}/${expense.date.year}';
+              if (!expensesByMonth.containsKey(monthKey)) {
+                expensesByMonth[monthKey] = [];
+              }
+              expensesByMonth[monthKey]!.add(expense);
+            }
+
+            final sortedMonths = expensesByMonth.keys.toList()
+              ..sort((a, b) {
+                final aParts = a.split('/');
+                final bParts = b.split('/');
+                final aDate = DateTime(
+                  int.parse(aParts[1]),
+                  int.parse(aParts[0]),
+                );
+                final bDate = DateTime(
+                  int.parse(bParts[1]),
+                  int.parse(bParts[0]),
+                );
+                return bDate.compareTo(aDate);
+              });
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: sortedMonths.length + 1, // +1 for header
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // Summary header - Calculate amounts by currency
+                  final totalExpenses = expenses.length;
+
+                  // Group amounts by currency for expenses you paid
+                  final Map<String, double> amountsByCurrency = {};
+                  for (var expense in expenses.where(
+                    (e) => e.paidBy == currentUserId,
+                  )) {
+                    final group = groups.firstWhere(
+                      (g) => g.id == expense.groupId,
+                    );
+                    final currency = group.currency;
+                    amountsByCurrency[currency] =
+                        (amountsByCurrency[currency] ?? 0) + expense.amount;
+                  }
+
+                  return Card(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Text(
+                            'All Expenses',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                               color: Theme.of(context).primaryColor,
                             ),
                           ),
-                          title: Text(
-                            expense.description,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              Text(
-                                groupName,
-                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              Column(
+                                children: [
+                                  Text(
+                                    '$totalExpenses',
+                                    style: TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Total Expenses',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                '${expense.date.day}/${expense.date.month}/${expense.date.year}',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                              Container(
+                                height: 50,
+                                width: 1,
+                                color: Colors.grey[300],
                               ),
-                              if (expense.category != null)
-                                Text(
-                                  expense.category!,
-                                  style: TextStyle(fontSize: 12, color: Colors.blue[700]),
-                                ),
+                              Column(
+                                children: [
+                                  if (amountsByCurrency.isEmpty)
+                                    Text(
+                                      AppConstants.formatAmount(0, 'USD'),
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    )
+                                  else
+                                    ...amountsByCurrency.entries.map(
+                                      (entry) => Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 2,
+                                        ),
+                                        child: Text(
+                                          AppConstants.formatAmount(
+                                            entry.value,
+                                            entry.key,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize:
+                                                amountsByCurrency.length > 1
+                                                ? 24
+                                                : 32,
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(
+                                              context,
+                                            ).primaryColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  Text(
+                                    'You Paid',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '\$${expense.amount.toStringAsFixed(2)}',
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final monthKey = sortedMonths[index - 1];
+                final monthExpenses = expensesByMonth[monthKey]!;
+                final monthParts = monthKey.split('/');
+                final monthNames = [
+                  '',
+                  'January',
+                  'February',
+                  'March',
+                  'April',
+                  'May',
+                  'June',
+                  'July',
+                  'August',
+                  'September',
+                  'October',
+                  'November',
+                  'December',
+                ];
+                final monthName =
+                    '${monthNames[int.parse(monthParts[0])]} ${monthParts[1]}';
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        monthName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    ...monthExpenses.map((expense) {
+                      return StreamBuilder<GroupModel?>(
+                        stream: Stream.fromFuture(
+                          _groupService.getGroup(expense.groupId),
+                        ),
+                        builder: (context, groupSnapshot) {
+                          final group = groupSnapshot.data;
+
+                          // Skip if group is deleted
+                          if (groupSnapshot.connectionState ==
+                                  ConnectionState.done &&
+                              group == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final groupName = group?.name ?? 'Loading...';
+                          final currency = group?.currency ?? 'USD';
+
+                          return Card(
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).primaryColor.withOpacity(0.1),
+                                child: Icon(
+                                  Icons.receipt,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                              ),
+                              title: Text(
+                                expense.description,
                                 style: const TextStyle(
-                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Text(
-                                expense.paidBy == currentUserId
-                                    ? 'You paid'
-                                    : '\$${expense.getShareAmount().toStringAsFixed(2)} your share',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: expense.paidBy == currentUserId
-                                      ? Colors.green[700]
-                                      : Colors.blue[700],
-                                ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    groupName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  Text(
+                                    '${expense.date.day}/${expense.date.month}/${expense.date.year}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                  if (expense.category != null)
+                                    Text(
+                                      expense.category!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blue[700],
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ],
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => GroupDetailsScreen(
-                                  groupId: expense.groupId,
-                                ),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    AppConstants.formatAmount(
+                                      expense.amount,
+                                      currency,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    expense.paidBy == currentUserId
+                                        ? 'You paid'
+                                        : '${AppConstants.formatAmount(expense.getShareAmount(), currency)} your share',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: expense.paidBy == currentUserId
+                                          ? Colors.green[700]
+                                          : Colors.blue[700],
+                                    ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => GroupDetailsScreen(
+                                      groupId: expense.groupId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
                       );
-                    },
-                  );
-                }),
-              ],
+                    }),
+                  ],
+                );
+              },
             );
           },
         );
@@ -936,9 +1531,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         if (groupSnapshot.hasError) {
-          return Center(
-            child: Text('Error: ${groupSnapshot.error}'),
-          );
+          return Center(child: Text('Error: ${groupSnapshot.error}'));
         }
 
         final groups = groupSnapshot.data ?? [];
@@ -950,7 +1543,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.account_balance_wallet, size: 80, color: Colors.grey[400]),
+                  Icon(
+                    Icons.account_balance_wallet,
+                    size: 80,
+                    color: Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'No settlements yet',
@@ -986,101 +1583,209 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   }
 
                   final expenses = expenseSnapshot.data ?? [];
-                  double youOwe = 0.0;
-                  double youAreOwed = 0.0;
+                  final activeGroupIds = groups.map((g) => g.id).toSet();
+
+                  // Filter out expenses from deleted groups
+                  final activeExpenses = expenses
+                      .where((e) => activeGroupIds.contains(e.groupId))
+                      .toList();
 
                   final Map<String, List<ExpenseModel>> expensesByGroup = {};
-                  for (var expense in expenses) {
+                  for (var expense in activeExpenses) {
                     if (!expensesByGroup.containsKey(expense.groupId)) {
                       expensesByGroup[expense.groupId] = [];
                     }
                     expensesByGroup[expense.groupId]!.add(expense);
                   }
 
-                  for (var groupExpenses in expensesByGroup.values) {
-                    final balances = <String, double>{};
-                    for (var expense in groupExpenses) {
-                      final shareAmount = expense.getShareAmount();
-                      balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
-                      for (var personId in expense.splitBetween) {
-                        balances[personId] = (balances[personId] ?? 0) - shareAmount;
+                  // Get settlements for all groups
+                  return StreamBuilder<List<SettlementModel>>(
+                    stream: _settlementService.getUserSettlements(
+                      currentUserId ?? '',
+                    ),
+                    builder: (context, allSettlementsSnapshot) {
+                      final allSettlements = allSettlementsSnapshot.data ?? [];
+
+                      // Re-initialize maps inside the settlement StreamBuilder
+                      final Map<String, double> youOweByCurrency = {};
+                      final Map<String, double> youAreOwedByCurrency = {};
+
+                      // Group settlements by groupId
+                      final Map<String, List<SettlementModel>>
+                      settlementsByGroup = {};
+                      for (var settlement in allSettlements) {
+                        if (!settlementsByGroup.containsKey(
+                          settlement.groupId,
+                        )) {
+                          settlementsByGroup[settlement.groupId] = [];
+                        }
+                        settlementsByGroup[settlement.groupId]!.add(settlement);
                       }
-                    }
 
-                    final myBalance = balances[currentUserId] ?? 0.0;
-                    if (myBalance < 0) {
-                      youOwe += -myBalance;
-                    } else if (myBalance > 0) {
-                      youAreOwed += myBalance;
-                    }
-                  }
+                      for (var groupId in expensesByGroup.keys) {
+                        final groupExpenses = expensesByGroup[groupId]!;
+                        final group = groups.firstWhere((g) => g.id == groupId);
+                        final currency = group.currency;
+                        final groupSettlements =
+                            settlementsByGroup[groupId] ?? [];
 
-                  return Card(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Overall Balance',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        final balances = <String, double>{};
+                        for (var expense in groupExpenses) {
+                          balances[expense.paidBy] =
+                              (balances[expense.paidBy] ?? 0) + expense.amount;
+                          for (var personId in expense.splitBetween) {
+                            final shareAmount = expense.getShareForUser(
+                              personId,
+                            );
+                            balances[personId] =
+                                (balances[personId] ?? 0) - shareAmount;
+                          }
+                        }
+
+                        // Apply settlements
+                        for (var settlement in groupSettlements) {
+                          balances[settlement.paidBy] =
+                              (balances[settlement.paidBy] ?? 0) +
+                              settlement.amount;
+                          balances[settlement.paidTo] =
+                              (balances[settlement.paidTo] ?? 0) -
+                              settlement.amount;
+                        }
+
+                        final myBalance = balances[currentUserId] ?? 0.0;
+                        if (myBalance < 0) {
+                          youOweByCurrency[currency] =
+                              (youOweByCurrency[currency] ?? 0) + (-myBalance);
+                        } else if (myBalance > 0) {
+                          youAreOwedByCurrency[currency] =
+                              (youAreOwedByCurrency[currency] ?? 0) + myBalance;
+                        }
+                      }
+
+                      return Card(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
                             children: [
-                              Column(
-                                children: [
-                                  Text(
-                                    '\$${youOwe.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                  Text(
-                                    'You owe',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                'Overall Balance',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).primaryColor,
+                                ),
                               ),
-                              Container(
-                                height: 50,
-                                width: 1,
-                                color: Colors.grey[300],
-                              ),
-                              Column(
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: [
-                                  Text(
-                                    '\$${youAreOwed.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        if (youOweByCurrency.isEmpty)
+                                          Text(
+                                            AppConstants.formatAmount(0, 'USD'),
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.red,
+                                            ),
+                                          )
+                                        else
+                                          ...youOweByCurrency.entries.map(
+                                            (entry) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 2,
+                                                  ),
+                                              child: Text(
+                                                AppConstants.formatAmount(
+                                                  entry.value,
+                                                  entry.key,
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      youOweByCurrency.length >
+                                                          1
+                                                      ? 22
+                                                      : 28,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.red,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          'You owe',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Text(
-                                    'You are owed',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
+                                  Container(
+                                    height: 50,
+                                    width: 1,
+                                    color: Colors.grey[300],
+                                  ),
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        if (youAreOwedByCurrency.isEmpty)
+                                          Text(
+                                            AppConstants.formatAmount(0, 'USD'),
+                                            style: const TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.green,
+                                            ),
+                                          )
+                                        else
+                                          ...youAreOwedByCurrency.entries.map(
+                                            (entry) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 2,
+                                                  ),
+                                              child: Text(
+                                                AppConstants.formatAmount(
+                                                  entry.value,
+                                                  entry.key,
+                                                ),
+                                                style: TextStyle(
+                                                  fontSize:
+                                                      youAreOwedByCurrency
+                                                              .length >
+                                                          1
+                                                      ? 22
+                                                      : 28,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        Text(
+                                          'You are owed',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   );
                 },
               );
@@ -1091,184 +1796,235 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return StreamBuilder<List<ExpenseModel>>(
               stream: _expenseService.getGroupExpenses(group.id),
               builder: (context, expenseSnapshot) {
-                if (!expenseSnapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
+                return StreamBuilder<List<SettlementModel>>(
+                  stream: _settlementService.getGroupSettlements(group.id),
+                  builder: (context, settlementSnapshot) {
+                    if (!expenseSnapshot.hasData ||
+                        !settlementSnapshot.hasData) {
+                      return const SizedBox.shrink();
+                    }
 
-                final expenses = expenseSnapshot.data ?? [];
+                    final expenses = expenseSnapshot.data ?? [];
+                    final settlements = settlementSnapshot.data ?? [];
 
-                if (expenses.isEmpty) {
-                  return const SizedBox.shrink();
-                }
+                    if (expenses.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
 
-                // Calculate balances
-                final balances = <String, double>{};
-                for (var expense in expenses) {
-                  final shareAmount = expense.getShareAmount();
-                  balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
-                  for (var personId in expense.splitBetween) {
-                    balances[personId] = (balances[personId] ?? 0) - shareAmount;
-                  }
-                }
+                    // Calculate balances from expenses
+                    final balances = <String, double>{};
+                    for (var expense in expenses) {
+                      balances[expense.paidBy] =
+                          (balances[expense.paidBy] ?? 0) + expense.amount;
+                      for (var personId in expense.splitBetween) {
+                        final shareAmount = expense.getShareForUser(personId);
+                        balances[personId] =
+                            (balances[personId] ?? 0) - shareAmount;
+                      }
+                    }
 
-                final myBalance = balances[currentUserId] ?? 0.0;
+                    // Apply settlements
+                    for (var settlement in settlements) {
+                      balances[settlement.paidBy] =
+                          (balances[settlement.paidBy] ?? 0) +
+                          settlement.amount;
+                      balances[settlement.paidTo] =
+                          (balances[settlement.paidTo] ?? 0) -
+                          settlement.amount;
+                    }
 
-                if (myBalance == 0) {
-                  return const SizedBox.shrink(); // Skip if settled
-                }
+                    final myBalance = balances[currentUserId] ?? 0.0;
 
-                return Card(
-                  child: ExpansionTile(
-                    leading: CircleAvatar(
-                      backgroundColor: myBalance < 0
-                          ? Colors.red.withOpacity(0.1)
-                          : Colors.green.withOpacity(0.1),
-                      child: Icon(
-                        Icons.group,
-                        color: myBalance < 0 ? Colors.red : Colors.green,
-                      ),
-                    ),
-                    title: Text(
-                      group.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      myBalance < 0
-                          ? 'You owe \$${(-myBalance).toStringAsFixed(2)}'
-                          : 'You are owed \$${myBalance.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        color: myBalance < 0 ? Colors.red[700] : Colors.green[700],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    trailing: Icon(
-                      myBalance < 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                      color: myBalance < 0 ? Colors.red : Colors.green,
-                    ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Group Balances:',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ...group.members.map((memberId) {
-                              final balance = balances[memberId] ?? 0.0;
-                              if (balance == 0) return const SizedBox.shrink();
+                    if (myBalance == 0) {
+                      return const SizedBox.shrink(); // Skip if settled
+                    }
 
-                              return FutureBuilder<UserModel?>(
-                                future: () async {
-                                  final doc = await FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(memberId)
-                                      .get();
-                                  if (doc.exists) {
-                                    return UserModel.fromJson(doc.data()!);
-                                  }
-                                  return null;
-                                }(),
-                                builder: (context, userSnapshot) {
-                                  final userName = userSnapshot.data?.name ?? 'Loading...';
+                    return Card(
+                      child: ExpansionTile(
+                        leading: CircleAvatar(
+                          backgroundColor: myBalance < 0
+                              ? Colors.red.withOpacity(0.1)
+                              : Colors.green.withOpacity(0.1),
+                          child: Icon(
+                            Icons.group,
+                            color: myBalance < 0 ? Colors.red : Colors.green,
+                          ),
+                        ),
+                        title: Text(
+                          group.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          myBalance < 0
+                              ? 'You owe ${AppConstants.formatAmount(-myBalance, group.currency)}'
+                              : 'You are owed ${AppConstants.formatAmount(myBalance, group.currency)}',
+                          style: TextStyle(
+                            color: myBalance < 0
+                                ? Colors.red[700]
+                                : Colors.green[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        trailing: Icon(
+                          myBalance < 0
+                              ? Icons.arrow_upward
+                              : Icons.arrow_downward,
+                          color: myBalance < 0 ? Colors.red : Colors.green,
+                        ),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Group Balances:',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ...group.members.map((memberId) {
+                                  final balance = balances[memberId] ?? 0.0;
+                                  if (balance == 0)
+                                    return const SizedBox.shrink();
 
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Row(
+                                  return FutureBuilder<UserModel?>(
+                                    future: () async {
+                                      final doc = await FirebaseFirestore
+                                          .instance
+                                          .collection('users')
+                                          .doc(memberId)
+                                          .get();
+                                      if (doc.exists) {
+                                        return UserModel.fromJson(doc.data()!);
+                                      }
+                                      return null;
+                                    }(),
+                                    builder: (context, userSnapshot) {
+                                      final userName =
+                                          userSnapshot.data?.name ??
+                                          'Loading...';
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
-                                            CircleAvatar(
-                                              radius: 16,
-                                              backgroundColor:
-                                                  Theme.of(context).primaryColor.withOpacity(0.1),
-                                              child: Text(
-                                                userName.isNotEmpty ? userName[0].toUpperCase() : '?',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Theme.of(context).primaryColor,
+                                            Row(
+                                              children: [
+                                                CircleAvatar(
+                                                  radius: 16,
+                                                  backgroundColor:
+                                                      Theme.of(context)
+                                                          .primaryColor
+                                                          .withOpacity(0.1),
+                                                  child: Text(
+                                                    userName.isNotEmpty
+                                                        ? userName[0]
+                                                              .toUpperCase()
+                                                        : '?',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Theme.of(
+                                                        context,
+                                                      ).primaryColor,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  memberId == currentUserId
+                                                      ? 'You'
+                                                      : userName,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 12),
                                             Text(
-                                              memberId == currentUserId ? 'You' : userName,
-                                              style: const TextStyle(fontSize: 14),
+                                              balance < 0
+                                                  ? 'owes ${AppConstants.formatAmount(-balance, group.currency)}'
+                                                  : 'gets ${AppConstants.formatAmount(balance, group.currency)}',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: balance < 0
+                                                    ? Colors.red[700]
+                                                    : Colors.green[700],
+                                              ),
                                             ),
                                           ],
                                         ),
-                                        Text(
-                                          balance < 0
-                                              ? 'owes \$${(-balance).toStringAsFixed(2)}'
-                                              : 'gets \$${balance.toStringAsFixed(2)}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: balance < 0 ? Colors.red[700] : Colors.green[700],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                      );
+                                    },
                                   );
-                                },
-                              );
-                            }),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    onPressed: () async {
-                                      final result = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => RecordSettlementScreen(
-                                            group: group,
-                                            balances: balances,
-                                          ),
+                                }),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final result = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  RecordSettlementScreen(
+                                                    group: group,
+                                                    balances: balances,
+                                                  ),
+                                            ),
+                                          );
+                                          if (result == true) {
+                                            // Settlement recorded, UI will update automatically
+                                          }
+                                        },
+                                        icon: const Icon(
+                                          Icons.check_circle,
+                                          size: 20,
                                         ),
-                                      );
-                                      if (result == true) {
-                                        // Settlement recorded, UI will update automatically
-                                      }
-                                    },
-                                    icon: const Icon(Icons.check_circle, size: 20),
-                                    label: const Text('Settle Balance'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
+                                        label: const Text('Settle Balance'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => GroupDetailsScreen(
-                                            groupId: group.id,
-                                          ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  GroupDetailsScreen(
+                                                    groupId: group.id,
+                                                  ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.visibility,
+                                          size: 20,
                                         ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.visibility, size: 20),
-                                    label: const Text('View Details'),
-                                  ),
+                                        label: const Text('View Details'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             );
@@ -1294,13 +2050,7 @@ class _SummaryItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
-        ),
+        Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey)),
         const SizedBox(height: 4),
         Text(
           amount,

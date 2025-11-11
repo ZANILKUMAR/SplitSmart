@@ -4,14 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/GroupModel.dart';
 import '../../models/UserModel.dart';
 import '../../services/group_service.dart';
+import '../../services/notification_service.dart';
 
 class AddMembersScreen extends StatefulWidget {
   final GroupModel group;
 
-  const AddMembersScreen({
-    super.key,
-    required this.group,
-  });
+  const AddMembersScreen({super.key, required this.group});
 
   @override
   State<AddMembersScreen> createState() => _AddMembersScreenState();
@@ -19,15 +17,14 @@ class AddMembersScreen extends StatefulWidget {
 
 class _AddMembersScreenState extends State<AddMembersScreen> {
   final _searchController = TextEditingController();
-  final _bulkInputController = TextEditingController();
   final _groupService = GroupService();
+  final _notificationService = NotificationService();
   final _firestore = FirebaseFirestore.instance;
-  
+
   List<UserModel> _searchResults = [];
   List<UserModel> _currentMembers = [];
   bool _isSearching = false;
   bool _isLoading = true;
-  bool _showBulkInput = false;
 
   @override
   void initState() {
@@ -38,7 +35,6 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _bulkInputController.dispose();
     super.dispose();
   }
 
@@ -127,9 +123,11 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
       // Filter out current members and current user
       final currentUser = FirebaseAuth.instance.currentUser;
       final filtered = allResults.values
-          .where((user) =>
-              !widget.group.members.contains(user.uid) &&
-              user.uid != currentUser?.uid)
+          .where(
+            (user) =>
+                !widget.group.members.contains(user.uid) &&
+                user.uid != currentUser?.uid,
+          )
           .toList();
 
       setState(() {
@@ -139,7 +137,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
     } catch (e) {
       print('Error searching users: $e');
       setState(() => _isSearching = false);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -151,117 +149,24 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
     }
   }
 
-  Future<void> _processBulkInput() async {
-    final input = _bulkInputController.text.trim();
-    if (input.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter email addresses or phone numbers'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    // Split by comma and clean up
-    final items = input
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No valid entries found'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isSearching = true);
-
-    try {
-      final allResults = <String, UserModel>{};
-      int notFoundCount = 0;
-
-      for (final item in items) {
-        // Try to find user by email or phone
-        QuerySnapshot? query;
-        
-        // Check if it looks like an email (contains @)
-        if (item.contains('@')) {
-          query = await _firestore
-              .collection('users')
-              .where('email', isEqualTo: item.toLowerCase())
-              .limit(1)
-              .get();
-        } else {
-          // Try as phone number
-          query = await _firestore
-              .collection('users')
-              .where('phoneNumber', isEqualTo: item)
-              .limit(1)
-              .get();
-        }
-
-        if (query.docs.isNotEmpty) {
-          final user = UserModel.fromJson(query.docs.first.data() as Map<String, dynamic>);
-          
-          // Only add if not already a member
-          if (!widget.group.members.contains(user.uid)) {
-            allResults[user.uid] = user;
-          }
-        } else {
-          notFoundCount++;
-        }
-      }
-
-      setState(() {
-        _searchResults = allResults.values.toList();
-        _isSearching = false;
-        _showBulkInput = false;
-        _bulkInputController.clear();
-      });
-
-      if (mounted) {
-        if (allResults.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Found ${allResults.length} user(s)${notFoundCount > 0 ? ' ($notFoundCount not found)' : ''}',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No users found for the provided entries'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('Error processing bulk input: $e');
-      setState(() => _isSearching = false);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _addMember(UserModel user) async {
     try {
-      await _groupService.addMember(widget.group.id, user.uid);
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      await _groupService.addMember(
+        widget.group.id,
+        user.uid,
+        addedBy: currentUserId,
+      );
+
+      // Send notification to the added member
+      if (currentUserId != null) {
+        await _notificationService.notifyMemberAdded(
+          userId: user.uid,
+          groupId: widget.group.id,
+          groupName: widget.group.name,
+          addedBy: currentUserId,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -353,119 +258,36 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Members'),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: Icon(_showBulkInput ? Icons.search : Icons.format_list_bulleted),
-            onPressed: () {
-              setState(() {
-                _showBulkInput = !_showBulkInput;
-                if (!_showBulkInput) {
-                  _bulkInputController.clear();
-                }
-              });
-            },
-            tooltip: _showBulkInput ? 'Search Mode' : 'Bulk Add Mode',
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Add Members'), elevation: 0),
       body: Column(
         children: [
-          if (_showBulkInput)
-            // Bulk Input Mode
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Add Multiple Members',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _bulkInputController,
-                    decoration: InputDecoration(
-                      hintText: 'Enter emails or phone numbers separated by commas\nExample: user@email.com, +1234567890, another@email.com',
-                      prefixIcon: const Icon(Icons.people),
-                      border: const OutlineInputBorder(),
-                    ),
-                    maxLines: 4,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isSearching ? null : _processBulkInput,
-                          icon: _isSearching
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.search),
-                          label: Text(_isSearching ? 'Searching...' : 'Find Users'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Users must be registered in the app',
-                            style: TextStyle(fontSize: 12, color: Colors.blue[900]),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name, email, or phone',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _searchUsers('');
+                        },
+                      )
+                    : null,
               ),
-            )
-          else
-            // Search Bar
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search by name, email, or phone',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _searchController.clear();
-                            _searchUsers('');
-                          },
-                        )
-                      : null,
-                ),
-                onChanged: (value) {
-                  _searchUsers(value);
-                },
-              ),
+              onChanged: (value) {
+                _searchUsers(value);
+              },
             ),
+          ),
 
           // Search Results or Current Members
           Expanded(
-            child: _searchController.text.isEmpty && !_showBulkInput
+            child: _searchController.text.isEmpty
                 ? _buildCurrentMembersList()
                 : _buildSearchResults(),
           ),
@@ -485,16 +307,12 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Text(
             'Current Members (${_currentMembers.length})',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ),
-        ..._currentMembers.map((member) => _buildMemberTile(
-              member,
-              isCurrentMember: true,
-            )),
+        ..._currentMembers.map(
+          (member) => _buildMemberTile(member, isCurrentMember: true),
+        ),
       ],
     );
   }
@@ -504,43 +322,55 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_searchResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No users found',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try searching by email or name',
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-            ),
-          ],
-        ),
-      );
-    }
-
     return ListView(
       children: [
+        // Always show "Create New Member" button
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'Search Results (${_searchResults.length})',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          child: ElevatedButton.icon(
+            onPressed: () => _showCreateMemberDialog(),
+            icon: const Icon(Icons.person_add),
+            label: const Text('Create New Member'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
         ),
-        ..._searchResults.map((user) => _buildMemberTile(
-              user,
-              isCurrentMember: false,
-            )),
+
+        if (_searchResults.isEmpty && _searchController.text.isNotEmpty) ...[
+          // No results message
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No users found',
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'User not registered in the app',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ] else if (_searchResults.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Search Results (${_searchResults.length})',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ..._searchResults.map(
+            (user) => _buildMemberTile(user, isCurrentMember: false),
+          ),
+        ],
       ],
     );
   }
@@ -584,11 +414,11 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
         ),
         trailing: isCurrentMember
             ? (isCreator
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.remove_circle, color: Colors.red),
-                    onPressed: () => _removeMember(user),
-                  ))
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.remove_circle, color: Colors.red),
+                      onPressed: () => _removeMember(user),
+                    ))
             : ElevatedButton.icon(
                 onPressed: () => _addMember(user),
                 icon: const Icon(Icons.add, size: 18),
@@ -597,6 +427,181 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                   minimumSize: const Size(80, 36),
                 ),
               ),
+      ),
+    );
+  }
+
+  void _showCreateMemberDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create New Member'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name *',
+                    hintText: 'Enter full name',
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email *',
+                    hintText: 'Enter email address',
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile Number *',
+                    hintText: 'Enter mobile number',
+                    prefixIcon: Icon(Icons.phone),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      final name = nameController.text.trim();
+                      final email = emailController.text.trim();
+                      final phone = phoneController.text.trim();
+
+                      // Validate inputs
+                      if (name.isEmpty || email.isEmpty || phone.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('All fields are required'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Validate email format
+                      final emailRegex = RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      );
+                      if (!emailRegex.hasMatch(email)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid email address'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() => isLoading = true);
+
+                      try {
+                        // Check if user with this email already exists
+                        final existingUsers = await FirebaseFirestore.instance
+                            .collection('users')
+                            .where('email', isEqualTo: email)
+                            .get();
+
+                        if (existingUsers.docs.isNotEmpty) {
+                          setState(() => isLoading = false);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'User with this email already exists. Try searching for them.',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+
+                        // Generate unique ID
+                        final newUserId = FirebaseFirestore.instance
+                            .collection('users')
+                            .doc()
+                            .id;
+
+                        // Create new user document
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(newUserId)
+                            .set({
+                              'uid': newUserId,
+                              'email': email,
+                              'name': name,
+                              'phoneNumber': phone,
+                            });
+
+                        // Create UserModel object
+                        final newUser = UserModel(
+                          uid: newUserId,
+                          email: email,
+                          name: name,
+                          phoneNumber: phone,
+                        );
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+
+                          // Add the user to the group
+                          await _addMember(newUser);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '$name has been created and added to the group',
+                              ),
+                            ),
+                          );
+
+                          // Clear search to show updated members list
+                          _searchController.clear();
+                          _searchUsers('');
+                        }
+                      } catch (e) {
+                        setState(() => isLoading = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error creating member: $e'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Create & Add'),
+            ),
+          ],
+        ),
       ),
     );
   }

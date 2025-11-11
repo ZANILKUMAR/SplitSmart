@@ -1,0 +1,31 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="64" height="64" fill="#2196F3" rx="8"/>
+  
+  <!-- Left wallet half -->
+  <path d="M 10 20 L 28 20 L 29 23 L 28 26 L 29 29 L 28 32 L 29 35 L 28 38 L 29 41 L 28 44 L 10 44 Q 8 44 8 42 L 8 22 Q 8 20 10 20 Z" 
+        fill="#1A1A1A" stroke="none"/>
+  
+  <!-- Right wallet half -->
+  <path d="M 36 20 L 54 20 Q 56 20 56 22 L 56 28 Q 56 29 55 29 L 50 29 Q 48 29 48 32 Q 48 35 50 35 L 55 35 Q 56 35 56 36 L 56 42 Q 56 44 54 44 L 36 44 L 35 41 L 36 38 L 35 35 L 36 32 L 35 29 L 36 26 L 35 23 L 36 20 Z" 
+        fill="#1A1A1A" stroke="none"/>
+  
+  <!-- Dollar sign -->
+  <g stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <!-- S curve -->
+    <path d="M 20 26 Q 16 26 16 29 Q 16 32 20 32 Q 24 32 24 35 Q 24 38 20 38"/>
+    <!-- Vertical line -->
+    <line x1="20" y1="24" x2="20" y2="40"/>
+  </g>
+  
+  <!-- Wallet clasp circle -->
+  <circle cx="50" cy="32" r="2" fill="#2196F3"/>
+  
+  <!-- Card lines on left wallet -->
+  <line x1="12" y1="25" x2="26" y2="25" stroke="#2196F3" stroke-width="1" opacity="0.6"/>
+  <line x1="12" y1="28" x2="23" y2="28" stroke="#2196F3" stroke-width="1" opacity="0.6"/>
+  
+  <!-- Highlight edges -->
+  <line x1="9" y1="22" x2="9" y2="42" stroke="#FFFFFF" stroke-width="0.5" opacity="0.3"/>
+  <line x1="55" y1="22" x2="55" y2="42" stroke="#FFFFFF" stroke-width="0.5" opacity="0.3"/>
+</svg>

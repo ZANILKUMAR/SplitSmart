@@ -4,7 +4,6 @@ import '../../models/GroupModel.dart';
 import '../../services/group_service.dart';
 import 'create_group_screen.dart';
 import 'group_details_screen.dart';
-import '../test/test_firebase_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
@@ -21,186 +20,137 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Center(
-        child: Text('Please log in to view groups'),
-      );
+      return const Center(child: Text('Please log in to view groups'));
     }
 
     return StreamBuilder<List<GroupModel>>(
-        stream: _groupService.getUserGroups(user.uid),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+      stream: _groupService.getUserGroups(user.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          if (snapshot.hasError) {
-            return Center(
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading groups',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  snapshot.error.toString(),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final groups = snapshot.data ?? [];
+
+        if (groups.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.red[300],
-                  ),
+                  Icon(Icons.group_add, size: 80, color: Colors.grey[300]),
                   const SizedBox(height: 16),
                   Text(
-                    'Error loading groups',
+                    'No groups yet',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                       color: Colors.grey[600],
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    snapshot.error.toString(),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
+                    'Create a group to start splitting expenses',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      print('==========================================');
+                      print('Create Group button clicked!');
+                      print('Context is valid: ${context.mounted}');
+                      print('Attempting navigation...');
+
+                      try {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) {
+                              print('Building CreateGroupScreen...');
+                              return const CreateGroupScreen();
+                            },
+                          ),
+                        );
+                        print('Navigation completed with result: $result');
+                      } catch (e, stackTrace) {
+                        print('Navigation error: $e');
+                        print('Stack trace: $stackTrace');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Navigation failed: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                      print('==========================================');
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Group'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(200, 48),
                     ),
-                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      print('Test button clicked!');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Button works! This is a test message.',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      minimumSize: const Size(200, 48),
+                    ),
+                    child: const Text('TEST: Click Me'),
                   ),
                 ],
               ),
-            );
-          }
-
-          final groups = snapshot.data ?? [];
-
-          if (groups.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.group_add,
-                      size: 80,
-                      color: Colors.grey[300],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No groups yet',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Create a group to start splitting expenses',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        print('==========================================');
-                        print('Create Group button clicked!');
-                        print('Context is valid: ${context.mounted}');
-                        print('Attempting navigation...');
-                        
-                        try {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) {
-                                print('Building CreateGroupScreen...');
-                                return const CreateGroupScreen();
-                              },
-                            ),
-                          );
-                          print('Navigation completed with result: $result');
-                        } catch (e, stackTrace) {
-                          print('Navigation error: $e');
-                          print('Stack trace: $stackTrace');
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Navigation failed: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                        print('==========================================');
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Group'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(200, 48),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        print('Test button clicked!');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Button works! This is a test message.'),
-                            backgroundColor: Colors.green,
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        minimumSize: const Size(200, 48),
-                      ),
-                      child: const Text('TEST: Click Me'),
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        print('Test Firebase button clicked!');
-                        try {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const TestFirebaseScreen(),
-                            ),
-                          );
-                        } catch (e) {
-                          print('Test Firebase navigation error: $e');
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      icon: const Icon(Icons.bug_report),
-                      label: const Text('Test Firebase'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.orange,
-                        minimumSize: const Size(200, 48),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: groups.length,
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return _GroupCard(group: group);
-            },
+            ),
           );
-        },
-      );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: groups.length,
+          itemBuilder: (context, index) {
+            final group = groups[index];
+            return _GroupCard(group: group);
+          },
+        );
+      },
+    );
   }
 }
 
@@ -290,10 +240,7 @@ class _GroupCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   group.description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -302,10 +249,7 @@ class _GroupCard extends StatelessWidget {
               // Created Date
               Text(
                 'Created ${_formatDate(group.createdAt)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
               ),
             ],
           ),
