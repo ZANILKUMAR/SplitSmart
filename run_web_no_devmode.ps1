@@ -14,6 +14,6 @@ Write-Host "`nLaunching on Chrome..." -ForegroundColor Green
 Write-Host "======================================`n" -ForegroundColor Cyan
 
 # Run on web - doesn't need symlinks for Android/iOS plugins
-flutter run -d chrome --web-renderer html
+flutter run -d chrome
 
 Write-Host "`nDone!" -ForegroundColor Cyan

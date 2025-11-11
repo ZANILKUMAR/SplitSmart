@@ -50,6 +50,9 @@ dependencies:
   # Local storage
   shared_preferences: ^2.3.3
   flutter_svg: ^2.2.2
+  
+  # Contacts
+  flutter_contacts: ^1.1.7+1
 
 dev_dependencies:
   flutter_test:
