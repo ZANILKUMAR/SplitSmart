@@ -22,6 +22,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+ 
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         // Determine which theme to use based on selection
@@ -34,13 +35,14 @@ class MyApp extends StatelessWidget {
           selectedTheme = AppTheme.lightTheme;
         }
 
-        return MaterialApp(
-          title: 'Split Smart',
-          theme: selectedTheme,
-          home: const LoginScreen(),
-          debugShowCheckedModeBanner: false,
-        );
-      },
+     
+ 
+    return MaterialApp(
+      title: 'Smart Split',
+      theme: AppTheme.theme,
+      home: const LoginScreen(),
+      debugShowCheckedModeBanner: false,
+ 
     );
   }
 }
