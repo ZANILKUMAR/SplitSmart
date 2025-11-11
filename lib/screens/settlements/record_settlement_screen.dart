@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/GroupModel.dart';
 import '../../models/UserModel.dart';
 import '../../services/settlement_service.dart';
+import '../../constants/currencies.dart';
 
 class RecordSettlementScreen extends StatefulWidget {
   final GroupModel group;
@@ -72,7 +73,7 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
 
   void _preselectUsers() {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    
+
     // Find who owes the most and who is owed the most
     String? maxOwesUser;
     String? maxOwedUser;
@@ -92,7 +93,7 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
 
     // Preselect based on current user's balance
     final myBalance = widget.balances[currentUserId] ?? 0.0;
-    
+
     if (myBalance < 0 && maxOwedUser != null) {
       // Current user owes money, preselect them as payer to who is owed most
       _selectedPaidBy = currentUserId;
@@ -165,7 +166,7 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
     } catch (e, stackTrace) {
       print('Error recording settlement: $e');
       print('Stack trace: $stackTrace');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -236,12 +237,19 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.lightbulb_outline, size: 16, color: Colors.orange[700]),
+                          Icon(
+                            Icons.lightbulb_outline,
+                            size: 16,
+                            color: Colors.orange[700],
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Tip: Click on suggested amounts to settle full balance',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
                             ),
                           ),
                         ],
@@ -257,13 +265,17 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
             // Amount
             TextFormField(
               controller: _amountController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Amount',
                 hintText: '0.00',
-                prefixIcon: Icon(Icons.attach_money),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.attach_money),
+                prefixText:
+                    '${AppConstants.getCurrencySymbol(widget.group.currency)} ',
+                border: const OutlineInputBorder(),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
               ],
@@ -329,11 +341,15 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                         InkWell(
                           onTap: () {
                             setState(() {
-                              _amountController.text = owesAmount.toStringAsFixed(2);
+                              _amountController.text = owesAmount
+                                  .toStringAsFixed(2);
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.orange,
                               borderRadius: BorderRadius.circular(12),
@@ -341,10 +357,17 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.touch_app, size: 12, color: Colors.white),
+                                const Icon(
+                                  Icons.touch_app,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '\$${owesAmount.toStringAsFixed(2)}',
+                                  AppConstants.formatAmount(
+                                    owesAmount,
+                                    widget.group.currency,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Colors.white,
@@ -360,19 +383,18 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        member.email,
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      Text(member.email, style: const TextStyle(fontSize: 12)),
                       if (balance != 0)
                         Text(
                           balance < 0
-                              ? 'Owes \$${(-balance).toStringAsFixed(2)}'
-                              : 'Owed \$${balance.toStringAsFixed(2)}',
+                              ? 'Owes ${AppConstants.formatAmount(-balance, widget.group.currency)}'
+                              : 'Owed ${AppConstants.formatAmount(balance, widget.group.currency)}',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: balance < 0 ? Colors.red[700] : Colors.green[700],
+                            color: balance < 0
+                                ? Colors.red[700]
+                                : Colors.green[700],
                           ),
                         ),
                     ],
@@ -409,11 +431,15 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                         InkWell(
                           onTap: () {
                             setState(() {
-                              _amountController.text = owedAmount.toStringAsFixed(2);
+                              _amountController.text = owedAmount
+                                  .toStringAsFixed(2);
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.orange,
                               borderRadius: BorderRadius.circular(12),
@@ -421,10 +447,17 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.touch_app, size: 12, color: Colors.white),
+                                const Icon(
+                                  Icons.touch_app,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '\$${owedAmount.toStringAsFixed(2)}',
+                                  AppConstants.formatAmount(
+                                    owedAmount,
+                                    widget.group.currency,
+                                  ),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Colors.white,
@@ -440,19 +473,18 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        member.email,
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      Text(member.email, style: const TextStyle(fontSize: 12)),
                       if (balance != 0)
                         Text(
                           balance < 0
-                              ? 'Owes \$${(-balance).toStringAsFixed(2)}'
-                              : 'Owed \$${balance.toStringAsFixed(2)}',
+                              ? 'Owes ${AppConstants.formatAmount(-balance, widget.group.currency)}'
+                              : 'Owed ${AppConstants.formatAmount(balance, widget.group.currency)}',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: balance < 0 ? Colors.red[700] : Colors.green[700],
+                            color: balance < 0
+                                ? Colors.red[700]
+                                : Colors.green[700],
                           ),
                         ),
                     ],
@@ -495,21 +527,17 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.check_circle),
                 label: const Text(
                   'Settle Balance',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               ),
             ),
           ],

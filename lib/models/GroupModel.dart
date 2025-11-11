@@ -9,6 +9,7 @@ class GroupModel {
   final DateTime createdAt;
   final String? imageUrl;
   final String currency; // Currency code (USD, INR, EUR, etc.)
+  final bool simplifyDebts; // Simplify group debts setting
 
   GroupModel({
     required this.id,
@@ -19,6 +20,7 @@ class GroupModel {
     required this.createdAt,
     this.imageUrl,
     this.currency = 'USD', // Default to USD
+    this.simplifyDebts = false, // Default to false
   });
 
   Map<String, dynamic> toJson() {
@@ -31,6 +33,7 @@ class GroupModel {
       'createdAt': Timestamp.fromDate(createdAt),
       'imageUrl': imageUrl,
       'currency': currency,
+      'simplifyDebts': simplifyDebts,
     };
   }
 
@@ -44,6 +47,7 @@ class GroupModel {
       createdAt: (json['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       imageUrl: json['imageUrl'],
       currency: json['currency'] ?? 'USD',
+      simplifyDebts: json['simplifyDebts'] ?? false,
     );
   }
 
@@ -56,6 +60,7 @@ class GroupModel {
     DateTime? createdAt,
     String? imageUrl,
     String? currency,
+    bool? simplifyDebts,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -66,6 +71,7 @@ class GroupModel {
       createdAt: createdAt ?? this.createdAt,
       imageUrl: imageUrl ?? this.imageUrl,
       currency: currency ?? this.currency,
+      simplifyDebts: simplifyDebts ?? this.simplifyDebts,
     );
   }
 }

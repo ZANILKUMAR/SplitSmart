@@ -15,7 +15,7 @@ class AuthService {
   UserModel? get currentUser {
     final user = _auth.currentUser;
     if (user == null) return null;
-    
+
     return UserModel(
       uid: user.uid,
       email: user.email ?? '',
@@ -31,37 +31,41 @@ class AuthService {
   ) async {
     try {
       print('AuthService: Attempting login for email: $email');
-      
-      final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+
+      final UserCredential userCredential = await _auth
+          .signInWithEmailAndPassword(email: email.trim(), password: password);
 
       if (userCredential.user != null) {
         print('AuthService: Login successful for: $email');
-        
-        // Fetch user data from Firestore
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .get();
 
-        if (userDoc.exists) {
-          return UserModel.fromJson({
-            ...userDoc.data()!,
-            'uid': userCredential.user!.uid,
-          });
-        } else {
-          // If user document doesn't exist, create one with email
-          return UserModel(
-            uid: userCredential.user!.uid,
-            email: userCredential.user!.email ?? email,
-            name: userCredential.user!.displayName ?? '',
-            phoneNumber: userCredential.user!.phoneNumber ?? '',
+        try {
+          // Fetch user data from Firestore
+          final userDoc = await _firestore
+              .collection('users')
+              .doc(userCredential.user!.uid)
+              .get();
+
+          if (userDoc.exists) {
+            return UserModel.fromJson({
+              ...userDoc.data()!,
+              'uid': userCredential.user!.uid,
+            });
+          }
+        } catch (firestoreError) {
+          print(
+            'AuthService: Firestore error (will use fallback): $firestoreError',
           );
         }
+
+        // If Firestore fetch fails or user document doesn't exist, use Firebase Auth data
+        return UserModel(
+          uid: userCredential.user!.uid,
+          email: userCredential.user!.email ?? email,
+          name: userCredential.user!.displayName ?? email.split('@')[0],
+          phoneNumber: userCredential.user!.phoneNumber ?? '',
+        );
       }
-      
+
       throw AuthException('Login failed');
     } on FirebaseAuthException catch (e) {
       print('AuthService: Firebase Auth Error: ${e.code}');
@@ -121,10 +125,11 @@ class AuthService {
     try {
       print('AuthService: Attempting registration for email: $email');
 
-      final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      final UserCredential userCredential = await _auth
+          .createUserWithEmailAndPassword(
+            email: email.trim(),
+            password: password,
+          );
 
       if (userCredential.user != null) {
         // Update display name

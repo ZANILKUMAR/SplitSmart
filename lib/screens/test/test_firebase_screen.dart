@@ -56,7 +56,7 @@ class _TestFirebaseScreenState extends State<TestFirebaseScreen> {
         final testDoc = FirebaseFirestore.instance
             .collection('test_collection')
             .doc('test_doc');
-        
+
         await testDoc.set({
           'test': true,
           'timestamp': FieldValue.serverTimestamp(),
@@ -82,12 +82,12 @@ class _TestFirebaseScreenState extends State<TestFirebaseScreen> {
         final groupRef = await FirebaseFirestore.instance
             .collection('groups')
             .add({
-          'name': 'Test Group ${DateTime.now().millisecondsSinceEpoch}',
-          'description': 'Automated test group',
-          'createdBy': user.uid,
-          'members': [user.uid],
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+              'name': 'Test Group ${DateTime.now().millisecondsSinceEpoch}',
+              'description': 'Automated test group',
+              'createdBy': user.uid,
+              'members': [user.uid],
+              'createdAt': FieldValue.serverTimestamp(),
+            });
         _addStatus('✅ Group created successfully!');
         _addStatus('   Group ID: ${groupRef.id}');
 
@@ -116,9 +116,7 @@ class _TestFirebaseScreenState extends State<TestFirebaseScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Firebase Connection Test'),
-      ),
+      appBar: AppBar(title: const Text('Firebase Connection Test')),
       body: Column(
         children: [
           if (_isLoading)
@@ -139,10 +137,7 @@ class _TestFirebaseScreenState extends State<TestFirebaseScreen> {
                 ),
                 child: Text(
                   _status,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 14),
                 ),
               ),
             ),

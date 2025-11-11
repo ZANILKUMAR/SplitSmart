@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/app_logo.dart';
 import '../dashboard/dashboard_screen.dart';
 import 'register_screen.dart'; // Updated import path
 
@@ -30,15 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Welcome to SmartSplit',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
+                const AppLogo(size: 120, showText: true),
+                const SizedBox(height: 48),
                 CustomTextField(
                   label: 'Email',
                   controller: _emailController,
@@ -120,9 +114,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } on AuthException catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.message)));
         }
       } finally {
         if (mounted) {
