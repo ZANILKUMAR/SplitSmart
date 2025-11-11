@@ -35,9 +35,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               children: [
                 const AppLogo(size: 100, showText: false),
                 const SizedBox(height: 24),
-                const Text(
-                  'Join SmartSplit',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                Text(
+                  'Join Split Smart',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),

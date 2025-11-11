@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../models/UserModel.dart';
 import '../../models/GroupModel.dart';
 import '../../models/ExpenseModel.dart';
@@ -17,6 +19,8 @@ import '../expenses/add_expense_screen.dart';
 import '../settlements/record_settlement_screen.dart';
 import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../members/members_screen.dart';
+import 'create_member_screen.dart';
 import '../settings/theme_settings_screen.dart';
 import '../../services/notification_service.dart';
 import '../../constants/currencies.dart';
@@ -42,7 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SmartSplit'),
+        title: const Text('Split Smart'),
         actions: [
           StreamBuilder<int>(
             stream: _notificationService.getUnreadNotificationsCount(
@@ -134,6 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           _buildHomeTab(),
           _buildGroupsTab(),
+          const MembersScreen(),
           _buildExpensesTab(),
           _buildSettleTab(),
         ],
@@ -144,6 +149,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Groups'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Members'),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long),
             label: 'Expenses',
@@ -215,7 +221,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
           child: const Icon(Icons.add),
         );
-      case 2: // Expenses tab
+      case 2: // Members tab - No FAB needed (screen has its own)
+        return null;
+      case 3: // Expenses tab
         return FloatingActionButton.extended(
           onPressed: () => _showGroupSelectionDialog(),
           icon: const Icon(Icons.add),
@@ -296,6 +304,230 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _importFromContacts() async {
+    // Check if running on web
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Contact import is only available on mobile devices'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Request permission
+      if (!await FlutterContacts.requestPermission(readonly: true)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Contact permission denied'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Get contacts with phone numbers
+      final contacts = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+
+      if (contacts.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No contacts found')),
+          );
+        }
+        return;
+      }
+
+      // Show contact selection dialog
+      if (mounted) {
+        final selectedContact = await showDialog<Contact>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Select Contact'),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: ListView.builder(
+                itemCount: contacts.length,
+                itemBuilder: (context, index) {
+                  final contact = contacts[index];
+                  final phone = contact.phones.isNotEmpty
+                      ? contact.phones.first.number
+                      : 'No phone';
+                  
+                  return ListTile(
+                    leading: CircleAvatar(
+                      child: Text(
+                        contact.displayName.isNotEmpty
+                            ? contact.displayName[0].toUpperCase()
+                            : '?',
+                      ),
+                    ),
+                    title: Text(contact.displayName),
+                    subtitle: Text(phone),
+                    onTap: () => Navigator.pop(context, contact),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+
+        if (selectedContact != null) {
+          // Pre-fill the create member form with contact data
+          final nameController = TextEditingController(
+            text: selectedContact.displayName,
+          );
+          final phoneController = TextEditingController(
+            text: selectedContact.phones.isNotEmpty
+                ? selectedContact.phones.first.number
+                : '',
+          );
+          final emailController = TextEditingController(
+            text: selectedContact.emails.isNotEmpty
+                ? selectedContact.emails.first.address
+                : '',
+          );
+
+          // Show create member dialog with pre-filled data
+          await _showCreateMemberDialog(
+            nameController: nameController,
+            emailController: emailController,
+            phoneController: phoneController,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error accessing contacts: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showCreateMemberDialog({
+    TextEditingController? nameController,
+    TextEditingController? emailController,
+    TextEditingController? phoneController,
+  }) async {
+    final nameCtrl = nameController ?? TextEditingController();
+    final emailCtrl = emailController ?? TextEditingController();
+    final phoneCtrl = phoneController ?? TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Member'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Name *',
+                prefixIcon: const Icon(Icons.person),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailCtrl,
+              decoration: InputDecoration(
+                labelText: 'Email *',
+                prefixIcon: const Icon(Icons.email),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneCtrl,
+              decoration: InputDecoration(
+                labelText: 'Mobile Number *',
+                prefixIcon: const Icon(Icons.phone),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.isEmpty ||
+                  emailCtrl.text.isEmpty ||
+                  phoneCtrl.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill all required fields'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                // Create member in Firestore
+                await FirebaseFirestore.instance.collection('users').add({
+                  'name': nameCtrl.text.trim(),
+                  'email': emailCtrl.text.trim(),
+                  'phoneNumber': phoneCtrl.text.trim(),
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'isRegistered': false,
+                });
+
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Member ${nameCtrl.text} created successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error creating member: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showAddMemberDialog() async {
     final TextEditingController searchController = TextEditingController();
     final TextEditingController nameController = TextEditingController();
@@ -311,10 +543,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: const Text('Add Member'),
           content: SizedBox(
             width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Search Field
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Import from Contacts Button (only on mobile)
+                  if (!kIsWeb)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await _importFromContacts();
+                        },
+                        icon: const Icon(Icons.contacts),
+                        label: const Text('Import from Contacts'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  if (!kIsWeb) const SizedBox(height: 16),
+                  
+                  // Search Field
                 TextField(
                   controller: searchController,
                   decoration: InputDecoration(
@@ -526,6 +778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ],
+              ),
             ),
           ),
           actions: [
@@ -622,7 +875,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton.icon(
-                onPressed: () => _showAddMemberDialog(),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CreateMemberScreen(),
+                    ),
+                  );
+                },
                 icon: const Icon(Icons.person_add),
                 label: const Text('Add Member'),
                 style: ElevatedButton.styleFrom(
@@ -915,39 +1175,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final groups = groupSnapshot.data ?? [];
 
             return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Your Groups',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () {
+                  setState(() => _selectedIndex = 1); // Switch to Groups tab
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Your Groups',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '${groups.length}',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).primaryColor,
+                          Row(
+                            children: [
+                              Text(
+                                '${groups.length}',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      groups.isEmpty
-                          ? 'Create your first group to start splitting expenses'
-                          : 'Total members: ${groups.fold<int>(0, (sum, g) => sum + g.members.length)}',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        groups.isEmpty
+                            ? 'Create your first group to start splitting expenses'
+                            : 'Total members: ${groups.fold<int>(0, (sum, g) => sum + g.members.length)}',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -965,7 +1241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             TextButton(
               onPressed: () {
-                setState(() => _selectedIndex = 2); // Switch to Expenses tab
+                setState(() => _selectedIndex = 3); // Switch to Expenses tab
               },
               child: const Text('View All'),
             ),
