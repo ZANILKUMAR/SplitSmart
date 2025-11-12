@@ -154,13 +154,16 @@ class AppTheme {
       contentPadding: const EdgeInsets.all(16),
       labelStyle: const TextStyle(color: Colors.white70),
       hintStyle: TextStyle(color: Colors.grey.shade500),
+      prefixIconColor: Colors.white70,
+      suffixIconColor: Colors.white70,
+      iconColor: Colors.white70,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF404040)),
+        borderSide: const BorderSide(color: Color(0xFF505050)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF404040)),
+        borderSide: const BorderSide(color: Color(0xFF505050)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -264,7 +267,14 @@ class AppTheme {
         color: Colors.white70,
       ),
     ),
-    iconTheme: const IconThemeData(color: Colors.white),
+    iconTheme: const IconThemeData(
+      color: Colors.white,
+      size: 24,
+    ),
+    primaryIconTheme: const IconThemeData(
+      color: Colors.white,
+      size: 24,
+    ),
     dividerColor: Colors.grey.shade700,
     dialogTheme: DialogThemeData(
       backgroundColor: const Color(0xFF1E1E1E),
@@ -305,6 +315,10 @@ class AppTheme {
       selectedColor: primarySwatch.shade700,
       secondaryLabelStyle: const TextStyle(color: Colors.white),
       brightness: Brightness.dark,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: primarySwatch.shade300,
+      circularTrackColor: Colors.grey.shade700,
     ),
   );
 
