@@ -304,6 +304,261 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _showExpenseDetailsDialog(
+    ExpenseModel expense,
+    GroupModel? group,
+  ) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final currency = group?.currency ?? 'USD';
+
+    // Get payer name
+    String payerName = 'Unknown';
+    if (expense.paidBy == currentUserId) {
+      payerName = 'You';
+    } else {
+      final payerDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(expense.paidBy)
+          .get();
+      if (payerDoc.exists) {
+        payerName = payerDoc.data()?['name'] ?? 'Unknown';
+      }
+    }
+
+    // Get split details
+    final splitDetails = <String, String>{};
+    for (var userId in expense.splitBetween) {
+      String memberName = 'Unknown';
+      if (userId == currentUserId) {
+        memberName = 'You';
+      } else {
+        final memberDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+        if (memberDoc.exists) {
+          memberName = memberDoc.data()?['name'] ?? 'Unknown';
+        }
+      }
+      final shareAmount = expense.getShareForUser(userId);
+      splitDetails[memberName] = AppConstants.formatAmount(
+        shareAmount,
+        currency,
+      );
+    }
+
+    if (!mounted) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.receipt,
+              color: Theme.of(context).primaryColor,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                expense.description,
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Group info
+              if (group != null) ...[
+                _buildDetailRow(
+                  'Group',
+                  group.name,
+                  Icons.group,
+                ),
+                const Divider(height: 24),
+              ],
+
+              // Amount
+              _buildDetailRow(
+                'Total Amount',
+                AppConstants.formatAmount(expense.amount, currency),
+                Icons.account_balance_wallet,
+                valueStyle: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).primaryColor,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Paid by
+              _buildDetailRow(
+                'Paid by',
+                payerName,
+                Icons.person,
+              ),
+              const SizedBox(height: 16),
+
+              // Date
+              _buildDetailRow(
+                'Date',
+                '${expense.date.day}/${expense.date.month}/${expense.date.year}',
+                Icons.calendar_today,
+              ),
+              const SizedBox(height: 16),
+
+              // Split type
+              _buildDetailRow(
+                'Split Type',
+                expense.splitType.toString().split('.').last.toUpperCase(),
+                Icons.splitscreen,
+              ),
+
+              // Split details
+              const Divider(height: 24),
+              Row(
+                children: [
+                  Icon(
+                    Icons.people,
+                    size: 20,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Split Details',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...splitDetails.entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: TextStyle(
+                          color: entry.key == 'You'
+                              ? Theme.of(context).primaryColor
+                              : null,
+                          fontWeight: entry.key == 'You'
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      Text(
+                        entry.value,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+
+              // Notes if any
+              if (expense.notes != null && expense.notes!.isNotEmpty) ...[
+                const Divider(height: 24),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.note,
+                      size: 20,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Notes',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  expense.notes!,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[300] : Colors.grey[700],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (group != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        GroupDetailsScreen(groupId: expense.groupId),
+                  ),
+                );
+              },
+              child: const Text('View Group'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(
+    String label,
+    String value,
+    IconData icon, {
+    TextStyle? valueStyle,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 20,
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: valueStyle ?? const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _importFromContacts() async {
     // Check if running on web
     if (kIsWeb) {
@@ -794,6 +1049,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildHomeTab() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
     return ListView(
@@ -833,7 +1089,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             'Welcome back,',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[600],
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
                             ),
                           ),
                           Text(
@@ -856,7 +1112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Row(
           children: [
             Expanded(
-              child: ElevatedButton.icon(
+              child: ElevatedButton(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -865,16 +1121,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   );
                 },
-                icon: const Icon(Icons.group_add),
-                label: const Text('Add Group'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.group_add, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add Group',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: ElevatedButton.icon(
+              child: ElevatedButton(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -883,10 +1156,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   );
                 },
-                icon: const Icon(Icons.person_add),
-                label: const Text('Add Member'),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.person_add, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'Add Member',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1174,12 +1464,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             final groups = groupSnapshot.data ?? [];
 
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () {
-                  setState(() => _selectedIndex = 1); // Switch to Groups tab
-                },
+            return GestureDetector(
+              onTap: () {
+                setState(() => _selectedIndex = 1); // Switch to Groups tab
+              },
+              child: Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -1209,7 +1498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               Icon(
                                 Icons.arrow_forward_ios,
                                 size: 16,
-                                color: Colors.grey[600],
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
                               ),
                             ],
                           ),
@@ -1220,7 +1509,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         groups.isEmpty
                             ? 'Create your first group to start splitting expenses'
                             : 'Total members: ${groups.fold<int>(0, (sum, g) => sum + g.members.length)}',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
                       ),
                     ],
                   ),
@@ -1281,17 +1573,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icon(
                         Icons.receipt_long,
                         size: 48,
-                        color: Colors.grey[400],
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'No expenses yet',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Create a group and add expenses to get started',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[500] : Colors.grey[500],
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -1343,14 +1641,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               groupName,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey[600],
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
                               ),
                             ),
                             Text(
                               '${expense.date.day}/${expense.date.month}/${expense.date.year}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[500],
+                                color: isDark ? Colors.grey[500] : Colors.grey[500],
                               ),
                             ),
                           ],
@@ -1383,13 +1681,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  GroupDetailsScreen(groupId: expense.groupId),
-                            ),
-                          );
+                          _showExpenseDetailsDialog(expense, group);
                         },
                       ),
                     );
@@ -1428,6 +1720,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
 
             if (snapshot.hasError) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -1443,7 +1736,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 8),
                       Text(
                         snapshot.error.toString(),
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -1459,6 +1755,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 .toList();
 
             if (expenses.isEmpty) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -1468,7 +1765,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icon(
                         Icons.receipt_long,
                         size: 80,
-                        color: Colors.grey[400],
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -1476,13 +1773,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.grey[600],
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Create a group and add expenses to get started',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.grey[500] : Colors.grey[500],
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
@@ -1535,6 +1835,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               itemBuilder: (context, index) {
                 if (index == 0) {
                   // Summary header - Calculate amounts by currency
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
                   final totalExpenses = expenses.length;
 
                   // Group amounts by currency for expenses you paid
@@ -1582,7 +1883,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     'Total Expenses',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.grey[600],
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -1590,7 +1891,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               Container(
                                 height: 50,
                                 width: 1,
-                                color: Colors.grey[300],
+                                color: isDark ? Colors.grey[700] : Colors.grey[300],
                               ),
                               Column(
                                 children: [
@@ -1631,7 +1932,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     'You Paid',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.grey[600],
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -1662,6 +1963,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   'November',
                   'December',
                 ];
+                final isDark = Theme.of(context).brightness == Brightness.dark;
                 final monthName =
                     '${monthNames[int.parse(monthParts[0])]} ${monthParts[1]}';
 
@@ -1724,14 +2026,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     groupName,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.grey[600],
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                                     ),
                                   ),
                                   Text(
                                     '${expense.date.day}/${expense.date.month}/${expense.date.year}',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[500],
+                                      color: isDark ? Colors.grey[500] : Colors.grey[500],
                                     ),
                                   ),
                                   if (expense.category != null)
@@ -1772,14 +2074,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ],
                               ),
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => GroupDetailsScreen(
-                                      groupId: expense.groupId,
-                                    ),
-                                  ),
-                                );
+                                _showExpenseDetailsDialog(expense, group);
                               },
                             ),
                           );
@@ -1813,6 +2108,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final groups = groupSnapshot.data ?? [];
 
         if (groups.isEmpty) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -1822,7 +2118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Icon(
                     Icons.account_balance_wallet,
                     size: 80,
-                    color: Colors.grey[400],
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1830,13 +2126,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[600],
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Create groups and add expenses to see who owes whom',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -1938,6 +2237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         }
                       }
 
+                      final isDark = Theme.of(context).brightness == Brightness.dark;
                       return Card(
                         color: Theme.of(context).primaryColor.withOpacity(0.1),
                         child: Padding(
@@ -1997,7 +2297,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           'You owe',
                                           style: TextStyle(
                                             fontSize: 14,
-                                            color: Colors.grey[600],
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
                                           ),
                                         ),
                                       ],
@@ -2006,7 +2306,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Container(
                                     height: 50,
                                     width: 1,
-                                    color: Colors.grey[300],
+                                    color: isDark ? Colors.grey[700] : Colors.grey[300],
                                   ),
                                   Expanded(
                                     child: Column(
@@ -2049,7 +2349,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           'You are owed',
                                           style: TextStyle(
                                             fontSize: 14,
-                                            color: Colors.grey[600],
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
                                           ),
                                         ),
                                       ],
@@ -2324,9 +2624,16 @@ class _SummaryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
-        Text(title, style: const TextStyle(fontSize: 14, color: Colors.grey)),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.grey[400] : Colors.grey,
+          ),
+        ),
         const SizedBox(height: 4),
         Text(
           amount,

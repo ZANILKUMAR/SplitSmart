@@ -36,6 +36,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   SplitType _splitType = SplitType.equal;
   Map<String, TextEditingController> _customAmountControllers = {};
   Map<String, TextEditingController> _percentageControllers = {};
+  bool _showAllPaidByMembers = false;
 
   final List<String> _categories = [
     'Food & Drinks',
@@ -649,26 +650,101 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             const SizedBox(height: 8),
 
             // Paid By
-            const Text(
-              'Paid By',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Paid By',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                if (_members.length > 1)
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _showAllPaidByMembers = !_showAllPaidByMembers;
+                      });
+                    },
+                    icon: Icon(
+                      _showAllPaidByMembers
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 20,
+                    ),
+                    label: Text(
+                      _showAllPaidByMembers ? 'Show Less' : 'Show All',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
-            ..._members.map((member) {
-              return RadioListTile<String>(
-                contentPadding: EdgeInsets.zero,
-                title: Text(member.name),
-                subtitle: Text(
-                  member.email,
-                  style: const TextStyle(fontSize: 12),
-                ),
-                value: member.uid,
-                groupValue: _selectedPaidBy,
-                onChanged: (value) {
-                  setState(() => _selectedPaidBy = value);
-                },
+            // Show current user first (always visible)
+            ...(() {
+              final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+              final currentUserMember = _members.firstWhere(
+                (m) => m.uid == currentUserId,
+                orElse: () => _members.first,
               );
-            }),
+              
+              return [
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Row(
+                    children: [
+                      Text(currentUserMember.name),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'You',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text(
+                    currentUserMember.email,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  value: currentUserMember.uid,
+                  groupValue: _selectedPaidBy,
+                  onChanged: (value) {
+                    setState(() => _selectedPaidBy = value);
+                  },
+                ),
+              ];
+            })(),
+            // Show other members only when expanded
+            if (_showAllPaidByMembers)
+              ..._members.where((member) {
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                return member.uid != currentUserId;
+              }).map((member) {
+                return RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(member.name),
+                  subtitle: Text(
+                    member.email,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  value: member.uid,
+                  groupValue: _selectedPaidBy,
+                  onChanged: (value) {
+                    setState(() => _selectedPaidBy = value);
+                  },
+                );
+              }),
 
             const Divider(),
             const SizedBox(height: 8),

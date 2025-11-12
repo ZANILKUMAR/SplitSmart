@@ -162,6 +162,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     TextFormField(
                       controller: _nameController,
                       enabled: _isEditing,
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black87,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Name',
                         prefixIcon: const Icon(Icons.person),
@@ -169,7 +174,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: !_isEditing,
-                        fillColor: _isEditing ? null : Colors.grey[100],
+                        fillColor: _isEditing
+                            ? null
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF2C2C2C)
+                                : Colors.grey[100]),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -184,10 +193,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Email Field (Read-only)
+                    // Email Field (disabled)
                     TextFormField(
                       controller: _emailController,
                       enabled: false,
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white70
+                            : Colors.black54,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Email',
                         prefixIcon: const Icon(Icons.email),
@@ -195,7 +209,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: true,
-                        fillColor: Colors.grey[100],
+                        fillColor: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF2C2C2C)
+                            : Colors.grey[100],
                         suffixIcon: const Tooltip(
                           message: 'Email cannot be changed',
                           child: Icon(Icons.lock, size: 20),
@@ -208,6 +224,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     TextFormField(
                       controller: _phoneController,
                       enabled: _isEditing,
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black87,
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Phone Number',
                         prefixIcon: const Icon(Icons.phone),
@@ -215,7 +236,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: !_isEditing,
-                        fillColor: _isEditing ? null : Colors.grey[100],
+                        fillColor: _isEditing
+                            ? null
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF2C2C2C)
+                                : Colors.grey[100]),
                         hintText: '+1234567890',
                       ),
                       keyboardType: TextInputType.phone,
@@ -333,9 +358,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildInfoRow(IconData icon, String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
-        Icon(icon, size: 20, color: Colors.grey[600]),
+        Icon(
+          icon,
+          size: 20,
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -343,7 +373,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Text(
                 label,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
               ),
               const SizedBox(height: 2),
               Text(

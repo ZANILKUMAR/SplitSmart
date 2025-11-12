@@ -108,7 +108,13 @@ class _MembersScreenState extends State<MembersScreen> {
             if (member.email.isNotEmpty) ...[
               Row(
                 children: [
-                  const Icon(Icons.email, size: 20, color: Colors.grey),
+                  Icon(
+                    Icons.email,
+                    size: 20,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[400]
+                        : Colors.grey[600],
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -123,7 +129,13 @@ class _MembersScreenState extends State<MembersScreen> {
             if (member.phoneNumber.isNotEmpty) ...[
               Row(
                 children: [
-                  const Icon(Icons.phone, size: 20, color: Colors.grey),
+                  Icon(
+                    Icons.phone,
+                    size: 20,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[400]
+                        : Colors.grey[600],
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -137,7 +149,13 @@ class _MembersScreenState extends State<MembersScreen> {
             ],
             Row(
               children: [
-                const Icon(Icons.verified_user, size: 20, color: Colors.grey),
+                Icon(
+                  Icons.verified_user,
+                  size: 20,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
+                ),
                 const SizedBox(width: 8),
                 Text(
                   member.isRegistered ? 'Registered User' : 'Unregistered',
