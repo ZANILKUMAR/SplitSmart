@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import '../../widgets/common/country_code_picker.dart';
 
 class CreateMemberScreen extends StatefulWidget {
   const CreateMemberScreen({super.key});
@@ -18,6 +19,7 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
   final _phoneController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
   bool _isLoading = false;
+  CountryCode _selectedCountry = CountryCodePicker.countries[0]; // Default to India
 
   @override
   void dispose() {
@@ -138,32 +140,62 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
       final currentUserId = FirebaseAuth.instance.currentUser?.uid;
       if (currentUserId == null) throw Exception('User not logged in');
 
-      // Check if member already exists
-      final existingQuery = await _firestore
-          .collection('users')
-          .where('phoneNumber', isEqualTo: _phoneController.text.trim())
-          .get();
+      // Combine country code with phone number
+      final fullPhoneNumber = _phoneController.text.trim().isEmpty
+          ? ''
+          : '${_selectedCountry.dialCode}${_phoneController.text.trim()}';
 
-      if (existingQuery.docs.isNotEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Member with this phone number already exists'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+      // Check if member already exists by phone number
+      if (fullPhoneNumber.isNotEmpty) {
+        final existingPhoneQuery = await _firestore
+            .collection('users')
+            .where('phoneNumber', isEqualTo: fullPhoneNumber)
+            .get();
+
+        if (existingPhoneQuery.docs.isNotEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Member with this phone number already exists'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
         }
-        setState(() => _isLoading = false);
-        return;
       }
 
-      // Create new member
-      await _firestore.collection('users').add({
+      // Check if member already exists by email
+      if (_emailController.text.trim().isNotEmpty) {
+        final existingEmailQuery = await _firestore
+            .collection('users')
+            .where('email', isEqualTo: _emailController.text.trim())
+            .get();
+
+        if (existingEmailQuery.docs.isNotEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Member with this email already exists'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      // Create new member with a unique ID
+      final newMemberDoc = _firestore.collection('users').doc();
+      await newMemberDoc.set({
+        'uid': newMemberDoc.id,
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim().isEmpty
-            ? null
+            ? ''
             : _emailController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
+        'phoneNumber': fullPhoneNumber,
         'isRegistered': false,
         'createdBy': currentUserId,
         'createdAt': FieldValue.serverTimestamp(),
@@ -240,35 +272,61 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Phone field
+              // Email field (mandatory)
               TextFormField(
-                controller: _phoneController,
+                controller: _emailController,
                 decoration: const InputDecoration(
-                  labelText: 'Phone Number',
-                  hintText: 'Enter phone number',
+                  labelText: 'Email *',
+                  hintText: 'Enter email address',
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.phone),
+                  prefixIcon: Icon(Icons.email),
                 ),
-                keyboardType: TextInputType.phone,
+                keyboardType: TextInputType.emailAddress,
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a phone number';
+                  final email = value?.trim() ?? '';
+                  
+                  if (email.isEmpty) {
+                    return 'Please enter an email address';
+                  }
+                  
+                  // Validate email format
+                  if (!email.contains('@')) {
+                    return 'Please enter a valid email';
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Email field (optional)
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email (Optional)',
-                  hintText: 'Enter email address',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
+              // Phone field with country code (optional)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CountryCodePicker(
+                    selectedCountry: _selectedCountry,
+                    onChanged: (country) {
+                      setState(() {
+                        _selectedCountry = country;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone Number (Optional)',
+                        hintText: 'Enter phone number',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        // Phone is optional, so no validation needed
+                        return null;
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 

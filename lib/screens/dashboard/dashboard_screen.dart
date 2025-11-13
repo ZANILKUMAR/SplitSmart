@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../models/UserModel.dart';
 import '../../models/GroupModel.dart';
 import '../../models/ExpenseModel.dart';
@@ -22,6 +21,7 @@ import '../notifications/notifications_screen.dart';
 import '../members/members_screen.dart';
 import 'create_member_screen.dart';
 import '../settings/theme_settings_screen.dart';
+import '../settings/about_screen.dart';
 import '../../services/notification_service.dart';
 import '../../constants/currencies.dart';
 
@@ -44,10 +44,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Split Smart'),
-        actions: [
+    return PopScope(
+      canPop: false, // Prevent going back to login screen
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          // If user tries to go back, show exit confirmation
+          _showExitConfirmation();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Split Smart'),
+          actions: [
           StreamBuilder<int>(
             stream: _notificationService.getUnreadNotificationsCount(
               widget.user.uid,
@@ -120,6 +128,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const PopupMenuItem<String>(
+                value: 'about',
+                child: Row(
+                  children: [
+                    Icon(Icons.info, size: 20),
+                    SizedBox(width: 8),
+                    Text('About'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
                 value: 'logout',
                 child: Row(
                   children: [
@@ -166,6 +184,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         },
       ),
       floatingActionButton: _buildFloatingActionButton(),
+      ), // Close PopScope
+    );
+  }
+
+  void _showExitConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exit App'),
+        content: const Text('Are you sure you want to exit?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Exit the app
+              SystemNavigator.pop();
+            },
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -181,6 +224,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ThemeSettingsScreen()),
+        );
+        break;
+      case 'about':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AboutScreen()),
         );
         break;
       case 'logout':
@@ -559,495 +608,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<void> _importFromContacts() async {
-    // Check if running on web
-    if (kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contact import is only available on mobile devices'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      // Request permission
-      if (!await FlutterContacts.requestPermission(readonly: true)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Contact permission denied'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Get contacts with phone numbers
-      final contacts = await FlutterContacts.getContacts(
-        withProperties: true,
-        withPhoto: false,
-      );
-
-      if (contacts.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No contacts found')),
-          );
-        }
-        return;
-      }
-
-      // Show contact selection dialog
-      if (mounted) {
-        final selectedContact = await showDialog<Contact>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Select Contact'),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 400,
-              child: ListView.builder(
-                itemCount: contacts.length,
-                itemBuilder: (context, index) {
-                  final contact = contacts[index];
-                  final phone = contact.phones.isNotEmpty
-                      ? contact.phones.first.number
-                      : 'No phone';
-                  
-                  return ListTile(
-                    leading: CircleAvatar(
-                      child: Text(
-                        contact.displayName.isNotEmpty
-                            ? contact.displayName[0].toUpperCase()
-                            : '?',
-                      ),
-                    ),
-                    title: Text(contact.displayName),
-                    subtitle: Text(phone),
-                    onTap: () => Navigator.pop(context, contact),
-                  );
-                },
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
-        );
-
-        if (selectedContact != null) {
-          // Pre-fill the create member form with contact data
-          final nameController = TextEditingController(
-            text: selectedContact.displayName,
-          );
-          final phoneController = TextEditingController(
-            text: selectedContact.phones.isNotEmpty
-                ? selectedContact.phones.first.number
-                : '',
-          );
-          final emailController = TextEditingController(
-            text: selectedContact.emails.isNotEmpty
-                ? selectedContact.emails.first.address
-                : '',
-          );
-
-          // Show create member dialog with pre-filled data
-          await _showCreateMemberDialog(
-            nameController: nameController,
-            emailController: emailController,
-            phoneController: phoneController,
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error accessing contacts: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _showCreateMemberDialog({
-    TextEditingController? nameController,
-    TextEditingController? emailController,
-    TextEditingController? phoneController,
-  }) async {
-    final nameCtrl = nameController ?? TextEditingController();
-    final emailCtrl = emailController ?? TextEditingController();
-    final phoneCtrl = phoneController ?? TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Member'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Name *',
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emailCtrl,
-              decoration: InputDecoration(
-                labelText: 'Email *',
-                prefixIcon: const Icon(Icons.email),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneCtrl,
-              decoration: InputDecoration(
-                labelText: 'Mobile Number *',
-                prefixIcon: const Icon(Icons.phone),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameCtrl.text.isEmpty ||
-                  emailCtrl.text.isEmpty ||
-                  phoneCtrl.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please fill all required fields'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              try {
-                // Create member in Firestore
-                await FirebaseFirestore.instance.collection('users').add({
-                  'name': nameCtrl.text.trim(),
-                  'email': emailCtrl.text.trim(),
-                  'phoneNumber': phoneCtrl.text.trim(),
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'isRegistered': false,
-                });
-
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Member ${nameCtrl.text} created successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error creating member: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showAddMemberDialog() async {
-    final TextEditingController searchController = TextEditingController();
-    final TextEditingController nameController = TextEditingController();
-    final TextEditingController emailController = TextEditingController();
-    final TextEditingController phoneController = TextEditingController();
-    List<UserModel> searchResults = [];
-    bool showCreateForm = false;
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Add Member'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: MediaQuery.of(context).size.height * 0.7,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Import from Contacts Button (only on mobile)
-                  if (!kIsWeb)
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await _importFromContacts();
-                        },
-                        icon: const Icon(Icons.contacts),
-                        label: const Text('Import from Contacts'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  if (!kIsWeb) const SizedBox(height: 16),
-                  
-                  // Search Field
-                TextField(
-                  controller: searchController,
-                  decoration: InputDecoration(
-                    labelText: 'Search by name or email',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onChanged: (value) async {
-                    if (value.isEmpty) {
-                      setState(() => searchResults = []);
-                      return;
-                    }
-
-                    final users = await FirebaseFirestore.instance
-                        .collection('users')
-                        .where('email', isGreaterThanOrEqualTo: value)
-                        .where('email', isLessThan: '${value}z')
-                        .limit(5)
-                        .get();
-
-                    final nameUsers = await FirebaseFirestore.instance
-                        .collection('users')
-                        .where('name', isGreaterThanOrEqualTo: value)
-                        .where('name', isLessThan: '${value}z')
-                        .limit(5)
-                        .get();
-
-                    final Set<String> seenIds = {};
-                    final List<UserModel> results = [];
-
-                    for (var doc in [...users.docs, ...nameUsers.docs]) {
-                      if (!seenIds.contains(doc.id)) {
-                        seenIds.add(doc.id);
-                        final data = doc.data();
-                        results.add(
-                          UserModel(
-                            uid: doc.id,
-                            email: data['email'] ?? '',
-                            name: data['name'] ?? '',
-                            phoneNumber: data['phoneNumber'] ?? '',
-                          ),
-                        );
-                      }
-                    }
-
-                    setState(() => searchResults = results);
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Search Results
-                if (searchResults.isNotEmpty)
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: searchResults.length,
-                      itemBuilder: (context, index) {
-                        final user = searchResults[index];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            child: Text(user.name[0].toUpperCase()),
-                          ),
-                          title: Text(user.name),
-                          subtitle: Text(user.email),
-                          onTap: () {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('${user.name} is already a user'),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-
-                // Create New Member Section
-                const Divider(height: 32),
-                if (!showCreateForm) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => setState(() => showCreateForm = true),
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Create New Member'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  const Text(
-                    'Create New Member',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Name *',
-                      prefixIcon: const Icon(Icons.person),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email *',
-                      prefixIcon: const Icon(Icons.email),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneController,
-                    decoration: InputDecoration(
-                      labelText: 'Mobile Number *',
-                      prefixIcon: const Icon(Icons.phone),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              setState(() => showCreateForm = false),
-                          child: const Text('Cancel'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (nameController.text.isEmpty ||
-                                emailController.text.isEmpty ||
-                                phoneController.text.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Please fill all required fields',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-
-                            // Create temporary password
-                            final tempPassword =
-                                'Temp@${DateTime.now().millisecondsSinceEpoch}';
-
-                            try {
-                              // Create user in Firebase Auth
-                              final userCredential = await FirebaseAuth.instance
-                                  .createUserWithEmailAndPassword(
-                                    email: emailController.text.trim(),
-                                    password: tempPassword,
-                                  );
-
-                              // Create user document
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(userCredential.user!.uid)
-                                  .set({
-                                    'name': nameController.text.trim(),
-                                    'email': emailController.text.trim(),
-                                    'phoneNumber': phoneController.text.trim(),
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  });
-
-                              if (!context.mounted) return;
-
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '${nameController.text} added successfully!',
-                                  ),
-                                ),
-                              );
-                            } catch (e) {
-                              if (!context.mounted) return;
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: ${e.toString()}'),
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text('Create'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-              ),
-            ),
-          ),
-          actions: [
-            if (!showCreateForm)
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildHomeTab() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -1355,94 +915,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     }
 
                     return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Your Balance',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedIndex = 4; // Switch to Settle tab
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Your Balance',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                _SummaryItem(
-                                  title: 'You owe',
-                                  amount: oweDisplay,
-                                  color: Colors.red,
-                                ),
-                                _SummaryItem(
-                                  title: 'You are owed',
-                                  amount: owedDisplay,
-                                  color: Colors.green,
-                                ),
-                              ],
-                            ),
-                            if (multipleCurrencies) ...[
-                              const SizedBox(height: 12),
-                              // Show breakdown by currency
-                              ...allCurrencies.map((currency) {
-                                final owe = youOweByCurrency[currency] ?? 0.0;
-                                final owed =
-                                    youAreOwedByCurrency[currency] ?? 0.0;
-                                if (owe == 0 && owed == 0)
-                                  return const SizedBox.shrink();
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _SummaryItem(
+                                    title: 'You owe',
+                                    amount: oweDisplay,
+                                    color: Colors.red,
+                                  ),
+                                  _SummaryItem(
+                                    title: 'You are owed',
+                                    amount: owedDisplay,
+                                    color: Colors.green,
+                                  ),
+                                ],
+                              ),
+                              if (multipleCurrencies) ...[
+                                const SizedBox(height: 12),
+                                // Show breakdown by currency
+                                ...allCurrencies.map((currency) {
+                                  final owe = youOweByCurrency[currency] ?? 0.0;
+                                  final owed =
+                                      youAreOwedByCurrency[currency] ?? 0.0;
+                                  if (owe == 0 && owed == 0)
+                                    return const SizedBox.shrink();
 
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      if (owe > 0) ...[
-                                        Text(
-                                          'Owe ${AppConstants.formatAmount(owe, currency)}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.red,
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        if (owe > 0) ...[
+                                          Text(
+                                            'Owe ${AppConstants.formatAmount(owe, currency)}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.red,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        if (owed > 0)
+                                          Text(
+                                            'Owed ${AppConstants.formatAmount(owed, currency)}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.green,
+                                            ),
+                                          ),
                                       ],
-                                      if (owed > 0)
-                                        Text(
-                                          'Owed ${AppConstants.formatAmount(owed, currency)}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            ],
-                            const SizedBox(height: 16),
-                            const Divider(),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text(
-                                  'Total Balance: ',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                                Text(
-                                  totalDisplay,
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: totalColor,
-                                  ),
-                                ),
+                                    ),
+                                  );
+                                }),
                               ],
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'Total Balance: ',
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                                  Text(
+                                    totalDisplay,
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: totalColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -1573,7 +1141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icon(
                         Icons.receipt_long,
                         size: 48,
-                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                        color: isDark ? Colors.grey[400] : Colors.grey[400],
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -1765,7 +1333,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Icon(
                         Icons.receipt_long,
                         size: 80,
-                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                        color: isDark ? Colors.grey[400] : Colors.grey[400],
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -1784,19 +1352,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: isDark ? Colors.grey[500] : Colors.grey[500],
                         ),
                         textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          setState(
-                            () => _selectedIndex = 1,
-                          ); // Switch to Groups tab
-                        },
-                        icon: const Icon(Icons.group),
-                        label: const Text('View Groups'),
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(200, 48),
-                        ),
                       ),
                     ],
                   ),
@@ -1853,18 +1408,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   return Card(
                     color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Text(
-                            'All Expenses',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = 4; // Switch to Settlements tab (index 4)
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Text(
+                              'All Expenses',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
+                              ),
                             ),
-                          ),
                           const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1942,6 +1504,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                     ),
+                    ), // Close InkWell
                   );
                 }
 
@@ -2118,7 +1681,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Icon(
                     Icons.account_balance_wallet,
                     size: 80,
-                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    color: isDark ? Colors.grey[400] : Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
                   Text(

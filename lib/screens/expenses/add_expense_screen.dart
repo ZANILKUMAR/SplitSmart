@@ -369,7 +369,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Total Expense',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             Text(
               AppConstants.formatAmount(totalExpense, widget.group.currency),
@@ -382,7 +387,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Entered',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             Text(
               AppConstants.formatAmount(enteredAmount, widget.group.currency),
@@ -399,7 +409,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Remaining',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             Row(
               children: [
@@ -454,7 +469,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Required',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             const Text(
               '100%',
@@ -467,7 +487,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Entered',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             Text(
               '${enteredPercentage.toStringAsFixed(2)}%',
@@ -484,7 +509,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           children: [
             Text(
               'Remaining',
-              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[700],
+              ),
             ),
             Row(
               children: [

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/UserModel.dart';
+import '../../services/group_service.dart';
+import '../../services/expense_service.dart';
+import '../../services/settlement_service.dart';
+import '../../constants/currencies.dart';
 import '../dashboard/create_member_screen.dart';
 
 class MembersScreen extends StatefulWidget {
@@ -13,6 +17,9 @@ class MembersScreen extends StatefulWidget {
 
 class _MembersScreenState extends State<MembersScreen> {
   final _firestore = FirebaseFirestore.instance;
+  final _groupService = GroupService();
+  final _expenseService = ExpenseService();
+  final _settlementService = SettlementService();
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -22,78 +29,118 @@ class _MembersScreenState extends State<MembersScreen> {
     super.dispose();
   }
 
-  Stream<List<UserModel>> _getMembersStream() {
+  // Get all unique members from all groups the user is part of
+  Stream<List<Map<String, dynamic>>> _getMembersWithBalancesStream() async* {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) return Stream.value([]);
+    if (currentUserId == null) {
+      yield [];
+      return;
+    }
 
-    return _firestore
-        .collection('users')
-        .orderBy('name')
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return UserModel.fromJson(data);
-      }).toList();
-    });
+    // Listen to groups, expenses, and settlements
+    await for (final groups in _groupService.getUserGroups(currentUserId)) {
+      final expenses = await _expenseService.getUserExpenses(currentUserId).first;
+      final settlements = await _settlementService.getUserSettlements(currentUserId).first;
+
+      // Get all unique member IDs from all groups
+      final Set<String> allMemberIds = {};
+      final Map<String, String> memberCurrencies = {}; // Store primary currency for each member
+      
+      for (var group in groups) {
+        for (var memberId in group.members) {
+          if (memberId != currentUserId) {
+            allMemberIds.add(memberId);
+            // Store the first currency we see for each member (could be from any group)
+            if (!memberCurrencies.containsKey(memberId)) {
+              memberCurrencies[memberId] = group.currency;
+            }
+          }
+        }
+      }
+
+      // Fetch user details for all members
+      final List<Map<String, dynamic>> membersWithBalances = [];
+      
+      for (var memberId in allMemberIds) {
+        try {
+          final userDoc = await _firestore.collection('users').doc(memberId).get();
+          if (!userDoc.exists) continue;
+          
+          final userData = userDoc.data()!;
+          final member = UserModel.fromJson({...userData, 'uid': memberId});
+
+          // Calculate balance with this member across all groups
+          double totalBalance = 0.0;
+          String primaryCurrency = memberCurrencies[memberId] ?? 'USD';
+          
+          // Group expenses and settlements by group to calculate balances
+          for (var group in groups) {
+            if (!group.members.contains(memberId)) continue;
+            
+            final groupExpenses = expenses.where((e) => e.groupId == group.id).toList();
+            final groupSettlements = settlements.where((s) => s.groupId == group.id).toList();
+            
+            // Calculate balance for this specific group
+            final Map<String, double> balances = {};
+            
+            // Process expenses
+            for (var expense in groupExpenses) {
+              balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
+              for (var personId in expense.splitBetween) {
+                final shareAmount = expense.getShareForUser(personId);
+                balances[personId] = (balances[personId] ?? 0) - shareAmount;
+              }
+            }
+            
+            // Apply settlements
+            for (var settlement in groupSettlements) {
+              balances[settlement.paidBy] = (balances[settlement.paidBy] ?? 0) + settlement.amount;
+              balances[settlement.paidTo] = (balances[settlement.paidTo] ?? 0) - settlement.amount;
+            }
+            
+            // Get balance between current user and this member
+            final myBalance = balances[currentUserId] ?? 0.0;
+            final theirBalance = balances[memberId] ?? 0.0;
+            
+            // If positive: they owe me, if negative: I owe them
+            if (myBalance > 0 || theirBalance < 0) {
+              totalBalance += myBalance;
+            } else if (theirBalance > 0 || myBalance < 0) {
+              totalBalance += myBalance;
+            }
+          }
+
+          membersWithBalances.add({
+            'member': member,
+            'balance': totalBalance,
+            'currency': primaryCurrency,
+          });
+        } catch (e) {
+          print('Error fetching member $memberId: $e');
+        }
+      }
+
+      // Sort by name
+      membersWithBalances.sort((a, b) {
+        final memberA = a['member'] as UserModel;
+        final memberB = b['member'] as UserModel;
+        return memberA.name.toLowerCase().compareTo(memberB.name.toLowerCase());
+      });
+
+      yield membersWithBalances;
+    }
   }
 
-  List<UserModel> _filterMembers(List<UserModel> members) {
-    if (_searchQuery.isEmpty) return members;
+  List<Map<String, dynamic>> _filterMembers(List<Map<String, dynamic>> membersWithBalances) {
+    if (_searchQuery.isEmpty) return membersWithBalances;
 
     final query = _searchQuery.toLowerCase();
-    return members.where((member) {
+    return membersWithBalances.where((item) {
+      final member = item['member'] as UserModel;
       return member.name.toLowerCase().contains(query) ||
           member.email.toLowerCase().contains(query) ||
           member.phoneNumber.toLowerCase().contains(query);
     }).toList();
-  }
-
-  Future<void> _deleteMember(UserModel member) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Member'),
-        content: Text(
-          'Are you sure you want to delete ${member.name}? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && member.id != null) {
-      try {
-        await _firestore.collection('users').doc(member.id).delete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Member deleted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error deleting member: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
   }
 
   void _showMemberDetails(UserModel member) {
@@ -181,11 +228,10 @@ class _MembersScreenState extends State<MembersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Members'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
+      body: Column(
+        children: [
+          // Search bar
+          Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
               controller: _searchController,
@@ -212,10 +258,10 @@ class _MembersScreenState extends State<MembersScreen> {
               },
             ),
           ),
-        ),
-      ),
-      body: StreamBuilder<List<UserModel>>(
-        stream: _getMembersStream(),
+          // Members list
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: _getMembersWithBalancesStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -238,45 +284,58 @@ class _MembersScreenState extends State<MembersScreen> {
           final filteredMembers = _filterMembers(allMembers);
 
           if (allMembers.isEmpty) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people_outline,
-                      size: 80, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No members yet',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.people_outline,
+                      size: 80,
+                      color: isDark ? Colors.grey[600] : Colors.grey[400],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap the + button to add a member',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
+                    const SizedBox(height: 16),
+                    Text(
+                      'No members yet',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Create a group and add members to see them here',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.grey[500] : Colors.grey[500],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             );
           }
 
           if (filteredMembers.isEmpty) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    Icons.search_off,
+                    size: 64,
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'No members found',
                     style: TextStyle(
                       fontSize: 18,
-                      color: Colors.grey[600],
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -284,7 +343,7 @@ class _MembersScreenState extends State<MembersScreen> {
                     'Try a different search term',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey[500],
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
                     ),
                   ),
                 ],
@@ -296,9 +355,10 @@ class _MembersScreenState extends State<MembersScreen> {
             itemCount: filteredMembers.length,
             padding: const EdgeInsets.all(8),
             itemBuilder: (context, index) {
-              final member = filteredMembers[index];
-              final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-              final isCurrentUser = member.id == currentUserId;
+              final memberData = filteredMembers[index];
+              final member = memberData['member'] as UserModel;
+              final balance = memberData['balance'] as double;
+              final currency = memberData['currency'] as String;
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 4),
@@ -317,84 +377,93 @@ class _MembersScreenState extends State<MembersScreen> {
                       ),
                     ),
                   ),
-                  title: Row(
-                    children: [
-                      Expanded(child: Text(member.name)),
-                      if (isCurrentUser)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'You',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.blue.shade900,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  title: Text(member.name),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (member.phoneNumber.isNotEmpty)
-                        Text(member.phoneNumber),
                       if (member.email.isNotEmpty)
                         Text(
                           member.email,
                           style: TextStyle(
                             fontSize: 12,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[500]
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      if (member.phoneNumber.isNotEmpty)
+                        Text(
+                          member.phoneNumber,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[500]
+                                : Colors.grey[600],
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                      // Balance display
+                      if (balance != 0)
+                        Row(
+                          children: [
+                            Icon(
+                              balance > 0 ? Icons.arrow_downward : Icons.arrow_upward,
+                              size: 14,
+                              color: balance > 0 ? Colors.green : Colors.red,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              balance > 0
+                                  ? 'owes you ${AppConstants.formatAmount(balance.abs(), currency)}'
+                                  : 'you owe ${AppConstants.formatAmount(balance.abs(), currency)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: balance > 0 ? Colors.green[700] : Colors.red[700],
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          'Settled up',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                             color: Colors.grey[600],
                           ),
                         ),
                     ],
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (member.isRegistered)
-                        Icon(Icons.verified, size: 16, color: Colors.green[700])
-                      else
-                        Icon(Icons.person_outline,
-                            size: 16, color: Colors.orange[700]),
-                      if (!isCurrentUser) ...[
-                        const SizedBox(width: 8),
-                        PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'delete') {
-                              _deleteMember(member);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, color: Colors.red, size: 20),
-                                  SizedBox(width: 8),
-                                  Text('Delete'),
-                                ],
-                              ),
-                            ),
-                          ],
+                      if (balance != 0)
+                        Text(
+                          AppConstants.formatAmount(balance.abs(), currency),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: balance > 0 ? Colors.green[700] : Colors.red[700],
+                          ),
                         ),
-                      ],
+                      if (member.isRegistered)
+                        Icon(Icons.verified, size: 14, color: Colors.green[700])
+                      else
+                        Icon(Icons.person_outline, size: 14, color: Colors.orange[700]),
                     ],
                   ),
                   onTap: () => _showMemberDetails(member),
-                  isThreeLine: member.email.isNotEmpty,
+                  isThreeLine: true,
                 ),
               );
             },
           );
         },
+      ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
