@@ -226,7 +226,12 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Already paid someone outside the app (cash, UPI, bank transfer)? Record it here to settle the balance.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey[800]
+                            : Colors.grey[700],
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -248,7 +253,9 @@ class _RecordSettlementScreenState extends State<RecordSettlementScreen> {
                               'Tip: Click on suggested amounts to settle full balance',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey[700],
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[800]
+                                    : Colors.grey[700],
                               ),
                             ),
                           ),

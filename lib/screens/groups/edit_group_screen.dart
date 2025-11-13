@@ -69,6 +69,130 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
     super.dispose();
   }
 
+  void _showColorPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Color'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: _groupColors.map((color) {
+              final isSelected = color == _selectedColor;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedColor = color;
+                  });
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? Colors.black : Colors.transparent,
+                      width: 3,
+                    ),
+                    boxShadow: [
+                      if (isSelected)
+                        BoxShadow(
+                          color: color.withOpacity(0.4),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                    ],
+                  ),
+                  child: isSelected
+                      ? const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 30,
+                        )
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showIconPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Icon'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: GridView.builder(
+            shrinkWrap: true,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+            ),
+            itemCount: _groupIcons.length,
+            itemBuilder: (context, index) {
+              final icon = _groupIcons[index];
+              final isSelected = icon == _selectedIcon;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedIcon = icon;
+                  });
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? _selectedColor.withOpacity(0.2)
+                        : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? _selectedColor : Colors.grey[300]!,
+                      width: isSelected ? 2 : 1,
+                    ),
+                    boxShadow: [
+                      if (isSelected)
+                        BoxShadow(
+                          color: _selectedColor.withOpacity(0.3),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                    ],
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isSelected ? _selectedColor : Colors.grey[600],
+                    size: 28,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _updateGroup() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -128,17 +252,62 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Group Icon Preview
+              // Icon and Color Selection (at top)
               Center(
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: _selectedColor.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _selectedColor, width: 3),
-                  ),
-                  child: Icon(_selectedIcon, size: 60, color: _selectedColor),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Icon Selector
+                    GestureDetector(
+                      onTap: _showIconPicker,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: _selectedColor.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _selectedColor,
+                            width: 2,
+                          ),
+                        ),
+                        child: Icon(
+                          _selectedIcon,
+                          color: _selectedColor,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Color Selector
+                    GestureDetector(
+                      onTap: _showColorPicker,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: _selectedColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.grey[300]!,
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _selectedColor.withOpacity(0.4),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.palette,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -215,109 +384,6 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
                     });
                   }
                 },
-              ),
-              const SizedBox(height: 24),
-
-              // Choose Icon Section
-              Text(
-                'Choose Icon',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 80,
-                child: GridView.builder(
-                  scrollDirection: Axis.horizontal,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                  ),
-                  itemCount: _groupIcons.length,
-                  itemBuilder: (context, index) {
-                    final icon = _groupIcons[index];
-                    final isSelected = icon == _selectedIcon;
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedIcon = icon;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? _selectedColor.withOpacity(0.2)
-                              : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isSelected
-                                ? _selectedColor
-                                : Colors.grey[300]!,
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Icon(
-                          icon,
-                          color: isSelected ? _selectedColor : Colors.grey[600],
-                          size: 28,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Choose Color Section
-              Text(
-                'Choose Color',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: _groupColors.map((color) {
-                  final isSelected = color == _selectedColor;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedColor = color;
-                      });
-                    },
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isSelected ? Colors.black : Colors.transparent,
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          if (isSelected)
-                            BoxShadow(
-                              color: color.withOpacity(0.4),
-                              blurRadius: 8,
-                              spreadRadius: 2,
-                            ),
-                        ],
-                      ),
-                      child: isSelected
-                          ? const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 30,
-                            )
-                          : null,
-                    ),
-                  );
-                }).toList(),
               ),
               const SizedBox(height: 32),
 

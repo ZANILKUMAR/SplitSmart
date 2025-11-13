@@ -250,7 +250,13 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
-            Icon(Icons.info_outline, size: 18, color: Colors.grey[600]),
+            Icon(
+              Icons.info_outline,
+              size: 18,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[400]
+                  : Colors.grey[600],
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -260,7 +266,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           ...myRelatedBalances,
           if (otherBalances.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Divider(color: Colors.grey[300]),
+            Divider(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[700]
+                  : Colors.grey[300],
+            ),
             const SizedBox(height: 8),
           ],
         ],
@@ -278,10 +288,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     required bool isCurrentUser,
     required bool isOwing,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       color: isCurrentUser
           ? (isOwing ? Colors.red[50] : Colors.green[50])
-          : Colors.grey[50],
+          : (isDark ? Colors.grey[800] : Colors.grey[50]),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -317,7 +328,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             const SizedBox(width: 8),
 
             // Arrow
-            Icon(Icons.arrow_forward, size: 18, color: Colors.grey[600]),
+            Icon(
+              Icons.arrow_forward,
+              size: 18,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
 
             const SizedBox(width: 8),
 
@@ -340,7 +355,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 fontWeight: FontWeight.bold,
                 color: isCurrentUser
                     ? (isOwing ? Colors.red[700] : Colors.green[700])
-                    : Colors.grey[800],
+                    : (isDark ? Colors.grey[300] : Colors.grey[800]),
               ),
             ),
           ],
@@ -441,7 +456,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                 '${_members.length} ${_members.length == 1 ? 'member' : 'members'}',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
@@ -457,7 +474,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         'Description',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -563,7 +582,12 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                   ),
                   subtitle: Text(
                     member.email,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    style: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[400]
+                          : Colors.grey[600],
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               );
@@ -623,7 +647,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                 expenseSnapshot.error.toString(),
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[500],
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[500],
                                 ),
                               ),
                             ],
@@ -644,14 +670,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               Icon(
                                 Icons.receipt_long,
                                 size: 48,
-                                color: Colors.grey[400],
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey[600]
+                                    : Colors.grey[400],
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'No expenses yet',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.grey[600],
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -659,7 +689,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                 'Add an expense to start tracking',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[500],
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[500]
+                                      : Colors.grey[500],
                                 ),
                               ),
                             ],
@@ -754,7 +786,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           '${expenses.length} ${expenses.length == 1 ? 'expense' : 'expenses'}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey[600],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
                           ),
                         ),
 
@@ -803,14 +837,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                     'Paid by ${payer.name}',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.grey[700],
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey[300]
+                                          : Colors.grey[700],
                                     ),
                                   ),
                                   Text(
                                     '${expense.date.day}/${expense.date.month}/${expense.date.year}',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[500],
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey[500]
+                                          : Colors.grey[500],
                                     ),
                                   ),
                                   if (expense.category != null)
@@ -841,7 +879,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                     '${AppConstants.formatAmount(shareAmount, _group!.currency)} your share',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Colors.grey[600],
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -968,14 +1008,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           Icon(
                             Icons.account_balance_wallet,
                             size: 48,
-                            color: Colors.grey[400],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[600]
+                                : Colors.grey[400],
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'No settlements yet',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[600],
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -983,7 +1027,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                             'Record payments to settle balances',
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey[500],
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[500]
+                                  : Colors.grey[500],
                             ),
                           ),
                         ],
@@ -1027,7 +1073,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           '${settlement.date.day}/${settlement.date.month}/${settlement.date.year}',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[500],
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[500]
+                                : Colors.grey[500],
                           ),
                         ),
                         trailing: Text(
@@ -1388,10 +1436,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   }
 
   Widget _buildDetailRow(String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
         Text(
           value,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),

@@ -85,27 +85,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           }
 
           if (snapshot.hasError) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error, size: 64, color: Colors.red[300]),
+                    Icon(
+                      Icons.error,
+                      size: 64,
+                      color: isDark ? Colors.red[400] : Colors.red[300],
+                    ),
                     const SizedBox(height: 16),
                     Text(
                       'Unable to load notifications',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+                        color: isDark ? Colors.grey[400] : Colors.grey[700],
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Error: ${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? Colors.grey[500] : Colors.grey[600],
+                      ),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
@@ -124,6 +132,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final notifications = snapshot.data ?? [];
 
           if (notifications.isEmpty) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -131,18 +140,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Icon(
                     Icons.notifications_none,
                     size: 80,
-                    color: Colors.grey[400],
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
                   Text(
                     'No notifications yet',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'You\'ll see updates about expenses and settlements here',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
+                    ),
                   ),
                 ],
               ),
@@ -164,6 +179,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationTile(NotificationModel notification) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     IconData icon;
     Color iconColor;
 
@@ -182,7 +198,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         break;
       default:
         icon = Icons.notifications;
-        iconColor = Colors.grey;
+        iconColor = isDark ? Colors.grey[500]! : Colors.grey;
     }
 
     return Dismissible(
@@ -225,7 +241,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: notification.isRead
-              ? Colors.grey[200]
+              ? (isDark ? Colors.grey[800] : Colors.grey[200])
               : iconColor.withOpacity(0.2),
           child: Icon(icon, color: iconColor, size: 20),
         ),
@@ -245,13 +261,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               notification.message,
               style: TextStyle(
                 fontSize: 13,
-                color: notification.isRead ? Colors.grey[600] : Colors.black87,
+                color: notification.isRead
+                    ? (isDark ? Colors.grey[500] : Colors.grey[600])
+                    : (isDark ? Colors.grey[300] : Colors.black87),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               timeago.format(notification.createdAt),
-              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.grey[600] : Colors.grey[500],
+              ),
             ),
           ],
         ),

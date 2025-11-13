@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../models/GroupModel.dart';
 import '../../models/UserModel.dart';
 import '../../services/group_service.dart';
@@ -72,63 +74,37 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
     setState(() => _isSearching = true);
 
     try {
-      // Search by email
-      final emailQuery = await _firestore
-          .collection('users')
-          .where('email', isGreaterThanOrEqualTo: query.toLowerCase())
-          .where('email', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
-          .limit(10)
-          .get();
-
-      // Search by name
-      final nameQuery = await _firestore
-          .collection('users')
-          .where('name', isGreaterThanOrEqualTo: query)
-          .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(10)
-          .get();
-
-      // Search by phone number
-      final phoneQuery = await _firestore
-          .collection('users')
-          .where('phoneNumber', isGreaterThanOrEqualTo: query)
-          .where('phoneNumber', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(10)
-          .get();
-
-      final emailResults = emailQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
-
-      final nameResults = nameQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
-
-      final phoneResults = phoneQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
-
-      // Combine and remove duplicates
-      final allResults = <String, UserModel>{};
-      for (var user in emailResults) {
-        allResults[user.uid] = user;
-      }
-      for (var user in nameResults) {
-        allResults[user.uid] = user;
-      }
-      for (var user in phoneResults) {
-        allResults[user.uid] = user;
-      }
-
-      // Filter out current members and current user
       final currentUser = FirebaseAuth.instance.currentUser;
-      final filtered = allResults.values
-          .where(
-            (user) =>
-                !widget.group.members.contains(user.uid) &&
-                user.uid != currentUser?.uid,
-          )
+      if (currentUser == null) {
+        setState(() => _isSearching = false);
+        return;
+      }
+
+      // Fetch all members created by current user
+      final allMembersQuery = await _firestore
+          .collection('users')
+          .where('createdBy', isEqualTo: currentUser.uid)
+          .get();
+
+      final allMembers = allMembersQuery.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
           .toList();
+
+      // Filter locally by search query (case-insensitive)
+      final queryLower = query.toLowerCase();
+      final filtered = allMembers.where((user) {
+        // Check if already in group
+        if (widget.group.members.contains(user.uid)) {
+          return false;
+        }
+
+        // Search in name, email, or phone
+        final matchesName = user.name.toLowerCase().contains(queryLower);
+        final matchesEmail = user.email.toLowerCase().contains(queryLower);
+        final matchesPhone = user.phoneNumber.toLowerCase().contains(queryLower);
+
+        return matchesName || matchesEmail || matchesPhone;
+      }).toList();
 
       setState(() {
         _searchResults = filtered;
@@ -264,24 +240,39 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           // Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by name, email, or phone',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _searchUsers('');
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (value) {
-                _searchUsers(value);
-              },
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, email, or phone',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchUsers('');
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (value) {
+                    _searchUsers(value);
+                  },
+                ),
+                if (!kIsWeb) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _importFromContacts,
+                    icon: const Icon(Icons.contacts),
+                    label: const Text('Import from Contacts'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
 
@@ -303,6 +294,18 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
 
     return ListView(
       children: [
+        // Create New Member button
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton.icon(
+            onPressed: () => _showCreateMemberDialog(),
+            icon: const Icon(Icons.person_add),
+            label: const Text('Create New Member'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
@@ -431,11 +434,201 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
     );
   }
 
+  Future<void> _importFromContacts() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Contact import is only available on mobile devices'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Check current permission status first
+      bool permissionGranted = await FlutterContacts.requestPermission(readonly: true);
+      
+      if (!permissionGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Contact permission is required to import contacts. Please grant permission in your device settings.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show loading indicator
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // Get contacts
+      final contacts = await FlutterContacts.getContacts(
+        withProperties: true,
+        withPhoto: false,
+      );
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      if (contacts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No contacts found on your device'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Show contact selection dialog
+      final selectedContact = await showDialog<Contact>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.contacts),
+              const SizedBox(width: 8),
+              Text('Select Contact (${contacts.length})'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView.builder(
+              itemCount: contacts.length,
+              itemBuilder: (context, index) {
+                final contact = contacts[index];
+                final phone = contact.phones.isNotEmpty
+                    ? contact.phones.first.number
+                    : '';
+                final email = contact.emails.isNotEmpty
+                    ? contact.emails.first.address
+                    : '';
+
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Theme.of(context).primaryColor.withOpacity(0.2),
+                    child: Text(
+                      contact.displayName.isNotEmpty
+                          ? contact.displayName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        color: Theme.of(context).primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text(contact.displayName),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (phone.isNotEmpty) Text(phone),
+                      if (email.isNotEmpty)
+                        Text(
+                          email,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                    ],
+                  ),
+                  isThreeLine: email.isNotEmpty && phone.isNotEmpty,
+                  onTap: () => Navigator.pop(context, contact),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedContact != null && mounted) {
+        // Pre-fill create member dialog with contact data
+        _showCreateMemberDialogWithData(
+          name: selectedContact.displayName,
+          phone: selectedContact.phones.isNotEmpty 
+              ? selectedContact.phones.first.number 
+              : '',
+          email: selectedContact.emails.isNotEmpty 
+              ? selectedContact.emails.first.address 
+              : '',
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error importing contact: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showCreateMemberDialogWithData({
+    String name = '',
+    String email = '',
+    String phone = '',
+  }) {
+    final nameController = TextEditingController(text: name);
+    final emailController = TextEditingController(text: email);
+    final phoneController = TextEditingController(text: phone);
+    bool isLoading = false;
+
+    _showCreateMemberDialogInternal(
+      nameController,
+      emailController,
+      phoneController,
+      isLoading,
+    );
+  }
+
   void _showCreateMemberDialog() {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
     bool isLoading = false;
+
+    _showCreateMemberDialogInternal(
+      nameController,
+      emailController,
+      phoneController,
+      isLoading,
+    );
+  }
+
+  void _showCreateMemberDialogInternal(
+    TextEditingController nameController,
+    TextEditingController emailController,
+    TextEditingController phoneController,
+    bool isLoading,
+  ) {
 
     showDialog(
       context: context,
@@ -459,9 +652,10 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                 TextField(
                   controller: emailController,
                   decoration: const InputDecoration(
-                    labelText: 'Email *',
+                    labelText: 'Email',
                     hintText: 'Enter email address',
                     prefixIcon: Icon(Icons.email),
+                    helperText: 'Email or Phone required',
                   ),
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
@@ -470,9 +664,10 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                 TextField(
                   controller: phoneController,
                   decoration: const InputDecoration(
-                    labelText: 'Mobile Number *',
+                    labelText: 'Mobile Number',
                     hintText: 'Enter mobile number',
                     prefixIcon: Icon(Icons.phone),
+                    helperText: 'Email or Phone required',
                   ),
                   keyboardType: TextInputType.phone,
                 ),
@@ -492,24 +687,45 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                       final email = emailController.text.trim();
                       final phone = phoneController.text.trim();
 
-                      // Validate inputs
-                      if (name.isEmpty || email.isEmpty || phone.isEmpty) {
+                      // Validate name
+                      if (name.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('All fields are required'),
+                            content: Text('Name is required'),
+                            backgroundColor: Colors.red,
                           ),
                         );
                         return;
                       }
 
-                      // Validate email format
-                      final emailRegex = RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                      );
-                      if (!emailRegex.hasMatch(email)) {
+                      // Validate at least one: email or phone
+                      if (email.isEmpty && phone.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please provide either email or phone number'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Validate email format if provided
+                      if (email.isNotEmpty && !email.contains('@')) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter a valid email address'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Validate phone format if provided (basic check)
+                      if (phone.isNotEmpty && phone.length < 10) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid phone number (minimum 10 digits)'),
+                            backgroundColor: Colors.red,
                           ),
                         );
                         return;
@@ -518,24 +734,51 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                       setState(() => isLoading = true);
 
                       try {
-                        // Check if user with this email already exists
-                        final existingUsers = await FirebaseFirestore.instance
-                            .collection('users')
-                            .where('email', isEqualTo: email)
-                            .get();
+                        // Check if user with this email or phone already exists
+                        if (email.isNotEmpty) {
+                          final existingEmailUsers = await FirebaseFirestore.instance
+                              .collection('users')
+                              .where('email', isEqualTo: email)
+                              .get();
 
-                        if (existingUsers.docs.isNotEmpty) {
-                          setState(() => isLoading = false);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'User with this email already exists. Try searching for them.',
+                          if (existingEmailUsers.docs.isNotEmpty) {
+                            setState(() => isLoading = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'User with this email already exists. Try searching for them.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 3),
                                 ),
-                              ),
-                            );
+                              );
+                            }
+                            return;
                           }
-                          return;
+                        }
+
+                        if (phone.isNotEmpty) {
+                          final existingPhoneUsers = await FirebaseFirestore.instance
+                              .collection('users')
+                              .where('phoneNumber', isEqualTo: phone)
+                              .get();
+
+                          if (existingPhoneUsers.docs.isNotEmpty) {
+                            setState(() => isLoading = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'User with this phone number already exists. Try searching for them.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            }
+                            return;
+                          }
                         }
 
                         // Generate unique ID
@@ -543,6 +786,8 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                             .collection('users')
                             .doc()
                             .id;
+
+                        final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
                         // Create new user document
                         await FirebaseFirestore.instance
@@ -553,6 +798,9 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                               'email': email,
                               'name': name,
                               'phoneNumber': phone,
+                              'isRegistered': false,
+                              'createdBy': currentUserId,
+                              'createdAt': FieldValue.serverTimestamp(),
                             });
 
                         // Create UserModel object

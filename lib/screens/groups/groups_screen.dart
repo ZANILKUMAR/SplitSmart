@@ -31,20 +31,31 @@ class _GroupsScreenState extends State<GroupsScreen> {
         }
 
         if (snapshot.hasError) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: isDark ? Colors.red[400] : Colors.red[300],
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Error loading groups',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   snapshot.error.toString(),
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -55,85 +66,50 @@ class _GroupsScreenState extends State<GroupsScreen> {
         final groups = snapshot.data ?? [];
 
         if (groups.isEmpty) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.group_add, size: 80, color: Colors.grey[300]),
+                  Icon(
+                    Icons.group_add,
+                    size: 80,
+                    color: isDark ? Colors.grey[400] : Colors.grey[300],
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'No groups yet',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey[600],
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Create a group to start splitting expenses',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.grey[500] : Colors.grey[500],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton.icon(
-                    onPressed: () async {
-                      print('==========================================');
-                      print('Create Group button clicked!');
-                      print('Context is valid: ${context.mounted}');
-                      print('Attempting navigation...');
-
-                      try {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) {
-                              print('Building CreateGroupScreen...');
-                              return const CreateGroupScreen();
-                            },
-                          ),
-                        );
-                        print('Navigation completed with result: $result');
-                      } catch (e, stackTrace) {
-                        print('Navigation error: $e');
-                        print('Stack trace: $stackTrace');
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Navigation failed: $e'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                      print('==========================================');
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const CreateGroupScreen(),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.add),
                     label: const Text('Create Group'),
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(200, 48),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      print('Test button clicked!');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Button works! This is a test message.',
-                          ),
-                          backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      minimumSize: const Size(200, 48),
-                    ),
-                    child: const Text('TEST: Click Me'),
                   ),
                 ],
               ),
@@ -161,6 +137,8 @@ class _GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Card(
       child: InkWell(
         onTap: () {
@@ -214,14 +192,14 @@ class _GroupCard extends StatelessWidget {
                             Icon(
                               Icons.people,
                               size: 16,
-                              color: Colors.grey[600],
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
                             Text(
                               '${group.members.length} ${group.members.length == 1 ? 'member' : 'members'}',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey[600],
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
                               ),
                             ),
                           ],
@@ -232,7 +210,7 @@ class _GroupCard extends StatelessWidget {
                   Icon(
                     Icons.arrow_forward_ios,
                     size: 16,
-                    color: Colors.grey[400],
+                    color: isDark ? Colors.grey[500] : Colors.grey[400],
                   ),
                 ],
               ),
@@ -240,43 +218,18 @@ class _GroupCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   group.description,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              const SizedBox(height: 8),
-              // Created Date
-              Text(
-                'Created ${_formatDate(group.createdAt)}',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'today';
-    } else if (difference.inDays == 1) {
-      return 'yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else if (difference.inDays < 30) {
-      final weeks = (difference.inDays / 7).floor();
-      return '$weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
-    } else if (difference.inDays < 365) {
-      final months = (difference.inDays / 30).floor();
-      return '$months ${months == 1 ? 'month' : 'months'} ago';
-    } else {
-      final years = (difference.inDays / 365).floor();
-      return '$years ${years == 1 ? 'year' : 'years'} ago';
-    }
   }
 }

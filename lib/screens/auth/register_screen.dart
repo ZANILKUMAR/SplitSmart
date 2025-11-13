@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/country_code_picker.dart';
 import '../../widgets/app_logo.dart';
 import 'login_screen.dart';
+import '../dashboard/dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
   bool _isLoading = false;
+  CountryCode _selectedCountry = CountryCodePicker.countries[0]; // Default to India
 
   @override
   Widget build(BuildContext context) {
@@ -73,16 +76,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                CustomTextField(
-                  label: 'Phone Number',
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    return null;
-                  },
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CountryCodePicker(
+                      selectedCountry: _selectedCountry,
+                      onChanged: (country) {
+                        setState(() {
+                          _selectedCountry = country;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: CustomTextField(
+                        label: 'Phone Number',
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your phone number';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 CustomTextField(
@@ -129,6 +148,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       : const Text('Register'),
                 ),
                 const SizedBox(height: 16),
+                // Divider with "OR"
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey[400])),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Google Sign-In Button
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _handleGoogleSignIn,
+                  icon: Image.network(
+                    'https://www.google.com/favicon.ico',
+                    height: 24,
+                    width: 24,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.g_mobiledata,
+                      size: 32,
+                    ),
+                  ),
+                  label: const Text('Continue with Google'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(color: Colors.grey[400]!),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
@@ -152,11 +208,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _isLoading = true);
 
       try {
+        // Combine country code with phone number
+        final fullPhoneNumber = '${_selectedCountry.dialCode}${_phoneController.text.trim()}';
+        
         final user = await _authService.registerWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text,
           _nameController.text.trim(),
-          _phoneController.text.trim(),
+          fullPhoneNumber,
         );
 
         if (mounted && user != null) {
@@ -179,6 +238,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
         if (mounted) {
           setState(() => _isLoading = false);
         }
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final user = await _authService.signInWithGoogle();
+
+      if (mounted && user != null) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => DashboardScreen(user: user),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google Sign-In was cancelled'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 4),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google Sign-In failed: ${e.toString()}'),
+            duration: const Duration(seconds: 4),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
