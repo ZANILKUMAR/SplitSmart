@@ -25,13 +25,23 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
 
   List<UserModel> _searchResults = [];
   List<UserModel> _currentMembers = [];
+  List<UserModel> _allMembers = [];
+  List<UserModel> _allCreatedMembers = []; // All members created by user
   bool _isSearching = false;
   bool _isLoading = true;
+  bool _isImportingContacts = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentMembers();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadCurrentMembers(),
+      _loadAllMembers(),
+    ]);
   }
 
   @override
@@ -52,33 +62,20 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
         }),
       );
 
-      setState(() {
-        _currentMembers = membersData.whereType<UserModel>().toList();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _currentMembers = membersData.whereType<UserModel>().toList();
+        });
+      }
     } catch (e) {
       print('Error loading members: $e');
-      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _searchUsers(String query) async {
-    if (query.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
-      return;
-    }
-
-    setState(() => _isSearching = true);
-
+  Future<void> _loadAllMembers() async {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) {
-        setState(() => _isSearching = false);
-        return;
-      }
+      if (currentUser == null) return;
 
       // Fetch all members created by current user
       final allMembersQuery = await _firestore
@@ -90,39 +87,60 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           .map((doc) => UserModel.fromJson(doc.data()))
           .toList();
 
-      // Filter locally by search query (case-insensitive)
-      final queryLower = query.toLowerCase();
-      final filtered = allMembers.where((user) {
-        // Check if already in group
-        if (widget.group.members.contains(user.uid)) {
-          return false;
-        }
-
-        // Search in name, email, or phone
-        final matchesName = user.name.toLowerCase().contains(queryLower);
-        final matchesEmail = user.email.toLowerCase().contains(queryLower);
-        final matchesPhone = user.phoneNumber.toLowerCase().contains(queryLower);
-
-        return matchesName || matchesEmail || matchesPhone;
-      }).toList();
-
-      setState(() {
-        _searchResults = filtered;
-        _isSearching = false;
-      });
-    } catch (e) {
-      print('Error searching users: $e');
-      setState(() => _isSearching = false);
+      // Filter out members already in the group for display
+      final availableMembers = allMembers
+          .where((user) => !widget.group.members.contains(user.uid))
+          .toList();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Search failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          // Store all created members for search
+          _allCreatedMembers = allMembers;
+          _allMembers = availableMembers;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading all members: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _searchUsers(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    // If members not loaded yet, wait
+    if (_allCreatedMembers.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    // Search from ALL created members (including those already in group)
+    final queryLower = query.toLowerCase();
+    final filtered = _allCreatedMembers.where((user) {
+      // Search in name, email, or phone
+      final matchesName = user.name.toLowerCase().contains(queryLower);
+      final matchesEmail = user.email.toLowerCase().contains(queryLower);
+      final matchesPhone = user.phoneNumber.toLowerCase().contains(queryLower);
+
+      return matchesName || matchesEmail || matchesPhone;
+    }).toList();
+
+    setState(() {
+      _searchResults = filtered;
+      _isSearching = false;
+    });
   }
 
   Future<void> _addMember(UserModel user) async {
@@ -156,6 +174,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
         setState(() {
           _currentMembers.add(user);
           _searchResults.remove(user);
+          _allMembers.remove(user);
         });
       }
     } catch (e) {
@@ -217,6 +236,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
 
         setState(() {
           _currentMembers.remove(user);
+          _allMembers.add(user);
         });
       }
     } catch (e) {
@@ -253,20 +273,28 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                             onPressed: () {
                               _searchController.clear();
                               _searchUsers('');
+                              setState(() {}); // Rebuild to update UI
                             },
                           )
                         : null,
                   ),
                   onChanged: (value) {
+                    setState(() {}); // Rebuild to update suffixIcon
                     _searchUsers(value);
                   },
                 ),
                 if (!kIsWeb) ...[
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _importFromContacts,
-                    icon: const Icon(Icons.contacts),
-                    label: const Text('Import from Contacts'),
+                    onPressed: _isImportingContacts ? null : _importFromContacts,
+                    icon: _isImportingContacts
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.contacts),
+                    label: Text(_isImportingContacts ? 'Loading...' : 'Import from Contacts'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                     ),
@@ -306,6 +334,8 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
             ),
           ),
         ),
+        
+        // Current Members Section
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Text(
@@ -316,6 +346,55 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
         ..._currentMembers.map(
           (member) => _buildMemberTile(member, isCurrentMember: true),
         ),
+        
+        // All Members Section
+        if (_allMembers.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Divider(
+              thickness: 2,
+              color: Theme.of(context).primaryColor.withOpacity(0.3),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.group_add,
+                  color: Theme.of(context).primaryColor,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'All Members (${_allMembers.length})',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              'Select members to add to this group',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey[600],
+              ),
+            ),
+          ),
+          ..._allMembers.map(
+            (member) => _buildMemberTile(member, isCurrentMember: false),
+          ),
+        ],
       ],
     );
   }
@@ -370,9 +449,10 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          ..._searchResults.map(
-            (user) => _buildMemberTile(user, isCurrentMember: false),
-          ),
+          ..._searchResults.map((user) {
+            final isInGroup = widget.group.members.contains(user.uid);
+            return _buildMemberTile(user, isCurrentMember: isInGroup);
+          }),
         ],
       ],
     );
@@ -380,6 +460,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
 
   Widget _buildMemberTile(UserModel user, {required bool isCurrentMember}) {
     final isCreator = user.uid == widget.group.createdBy;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -409,11 +490,26 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                   style: TextStyle(fontSize: 12, color: Colors.orange),
                 ),
               ),
+            if (isCurrentMember && !isCreator)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'In Group',
+                  style: TextStyle(fontSize: 12, color: Colors.green),
+                ),
+              ),
           ],
         ),
         subtitle: Text(
           user.email,
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600], 
+            fontSize: 13,
+          ),
         ),
         trailing: isCurrentMember
             ? (isCreator
@@ -445,11 +541,48 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
       return;
     }
 
+    // Prevent multiple clicks
+    if (_isImportingContacts) return;
+
+    setState(() {
+      _isImportingContacts = true;
+    });
+
     try {
-      // Check current permission status first
+      // Show loading indicator immediately
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async => false,
+            child: const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Expanded(
+                    child: Text(
+                      'Loading contacts...',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      // Check current permission status
       bool permissionGranted = await FlutterContacts.requestPermission(readonly: true);
       
       if (!permissionGranted) {
+        // Close loading dialog
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -460,17 +593,6 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           );
         }
         return;
-      }
-
-      // Show loading indicator
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
       }
 
       // Get contacts
@@ -588,6 +710,12 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingContacts = false;
+        });
+      }
     }
   }
 
@@ -629,6 +757,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
     TextEditingController phoneController,
     bool isLoading,
   ) {
+    String selectedCountryCode = '+91'; // Default to India
 
     showDialog(
       context: context,
@@ -655,21 +784,70 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                     labelText: 'Email',
                     hintText: 'Enter email address',
                     prefixIcon: Icon(Icons.email),
-                    helperText: 'Email or Phone required',
+                    helperText: 'Email or Phone (at least one required)',
                   ),
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'Mobile Number',
-                    hintText: 'Enter mobile number',
-                    prefixIcon: Icon(Icons.phone),
-                    helperText: 'Email or Phone required',
-                  ),
-                  keyboardType: TextInputType.phone,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Country Code Dropdown (smaller)
+                    SizedBox(
+                      width: 100,
+                      child: DropdownButtonFormField<String>(
+                        value: selectedCountryCode,
+                        decoration: const InputDecoration(
+                          labelText: 'Code',
+                          prefixIcon: Icon(Icons.flag, size: 20),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: '+1', child: Text('+1')),
+                          DropdownMenuItem(value: '+44', child: Text('+44')),
+                          DropdownMenuItem(value: '+91', child: Text('+91')),
+                          DropdownMenuItem(value: '+86', child: Text('+86')),
+                          DropdownMenuItem(value: '+81', child: Text('+81')),
+                          DropdownMenuItem(value: '+61', child: Text('+61')),
+                          DropdownMenuItem(value: '+49', child: Text('+49')),
+                          DropdownMenuItem(value: '+33', child: Text('+33')),
+                          DropdownMenuItem(value: '+39', child: Text('+39')),
+                          DropdownMenuItem(value: '+34', child: Text('+34')),
+                          DropdownMenuItem(value: '+7', child: Text('+7')),
+                          DropdownMenuItem(value: '+55', child: Text('+55')),
+                          DropdownMenuItem(value: '+52', child: Text('+52')),
+                          DropdownMenuItem(value: '+82', child: Text('+82')),
+                          DropdownMenuItem(value: '+65', child: Text('+65')),
+                          DropdownMenuItem(value: '+971', child: Text('+971')),
+                          DropdownMenuItem(value: '+966', child: Text('+966')),
+                          DropdownMenuItem(value: '+27', child: Text('+27')),
+                          DropdownMenuItem(value: '+234', child: Text('+234')),
+                          DropdownMenuItem(value: '+254', child: Text('+254')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            selectedCountryCode = value!;
+                          });
+                        },
+                        isExpanded: true,
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Phone Number Field (larger)
+                    Expanded(
+                      child: TextField(
+                        controller: phoneController,
+                        decoration: const InputDecoration(
+                          labelText: 'Mobile Number',
+                          hintText: 'Enter mobile number',
+                          helperText: 'Email or Phone (at least one required)',
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -685,7 +863,12 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                   : () async {
                       final name = nameController.text.trim();
                       final email = emailController.text.trim();
-                      final phone = phoneController.text.trim();
+                      final phoneOnly = phoneController.text.trim();
+                      
+                      // Combine country code with phone number if phone is provided
+                      final phone = phoneOnly.isNotEmpty 
+                          ? '$selectedCountryCode$phoneOnly' 
+                          : '';
 
                       // Validate name
                       if (name.isEmpty) {
@@ -699,7 +882,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                       }
 
                       // Validate at least one: email or phone
-                      if (email.isEmpty && phone.isEmpty) {
+                      if (email.isEmpty && phoneOnly.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Please provide either email or phone number'),
@@ -721,7 +904,7 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                       }
 
                       // Validate phone format if provided (basic check)
-                      if (phone.isNotEmpty && phone.length < 10) {
+                      if (phoneOnly.isNotEmpty && phoneOnly.length < 10) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter a valid phone number (minimum 10 digits)'),
@@ -828,6 +1011,9 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
                           // Clear search to show updated members list
                           _searchController.clear();
                           _searchUsers('');
+                          
+                          // Reload all members to update the list
+                          _loadAllMembers();
                         }
                       } catch (e) {
                         setState(() => isLoading = false);

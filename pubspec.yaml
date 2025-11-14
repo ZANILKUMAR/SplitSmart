@@ -60,6 +60,9 @@ dependencies:
   
   # URL launcher
   url_launcher: ^6.3.0
+  
+  # Biometric authentication
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:

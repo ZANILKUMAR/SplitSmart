@@ -29,7 +29,7 @@ class _MembersScreenState extends State<MembersScreen> {
     super.dispose();
   }
 
-  // Get all unique members from all groups the user is part of
+  // Get all unique members from all groups the user is part of AND members created by user
   Stream<List<Map<String, dynamic>>> _getMembersWithBalancesStream() async* {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) {
@@ -54,6 +54,22 @@ class _MembersScreenState extends State<MembersScreen> {
             if (!memberCurrencies.containsKey(memberId)) {
               memberCurrencies[memberId] = group.currency;
             }
+          }
+        }
+      }
+
+      // Also fetch all members created by the current user
+      final createdMembersQuery = await _firestore
+          .collection('users')
+          .where('createdBy', isEqualTo: currentUserId)
+          .get();
+      
+      for (var doc in createdMembersQuery.docs) {
+        final memberId = doc.id;
+        if (memberId != currentUserId) {
+          allMemberIds.add(memberId);
+          if (!memberCurrencies.containsKey(memberId)) {
+            memberCurrencies[memberId] = 'USD'; // Default currency for created members
           }
         }
       }

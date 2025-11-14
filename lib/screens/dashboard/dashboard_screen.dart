@@ -15,10 +15,11 @@ import '../groups/groups_screen.dart';
 import '../groups/create_group_screen.dart';
 import '../groups/group_details_screen.dart';
 import '../expenses/add_expense_screen.dart';
-import '../settlements/record_settlement_screen.dart';
+import '../settlements/settlements_screen.dart';
 import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../members/members_screen.dart';
+import '../account/account_screen.dart';
 import 'create_member_screen.dart';
 import '../settings/theme_settings_screen.dart';
 import '../settings/about_screen.dart';
@@ -41,6 +42,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _settlementService = SettlementService();
   final _notificationService = NotificationService();
   int _selectedIndex = 0;
+
+  // Helper method to get user name
+  Future<String> _getUserName(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        return userData?['name'] ?? 'Unknown';
+      }
+      return 'Unknown';
+    } catch (e) {
+      print('Error fetching user name: $e');
+      return 'Unknown';
+    }
+  }
+
+  // Helper method to get top people you owe and who owe you
+  Future<Map<String, dynamic>> _getTopPeople(
+    Map<String, List<ExpenseModel>> expensesByGroup,
+    Map<String, List<SettlementModel>> settlementsByGroup,
+    List<GroupModel> activeGroups,
+    String currentUserId,
+  ) async {
+    // Calculate balances per person across all groups
+    final Map<String, double> personBalances = {};
+    final Map<String, String> personCurrencies = {};
+    final Map<String, String> personNames = {};
+
+    for (var group in activeGroups) {
+      final groupId = group.id;
+      final currency = group.currency;
+      final groupExpenses = expensesByGroup[groupId] ?? [];
+      final groupSettlements = settlementsByGroup[groupId] ?? [];
+
+      // Calculate balances for this group
+      final balances = <String, double>{};
+      
+      for (var expense in groupExpenses) {
+        balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
+        for (var personId in expense.splitBetween) {
+          final shareAmount = expense.getShareForUser(personId);
+          balances[personId] = (balances[personId] ?? 0) - shareAmount;
+        }
+      }
+
+      // Apply settlements
+      for (var settlement in groupSettlements) {
+        balances[settlement.paidBy] = (balances[settlement.paidBy] ?? 0) + settlement.amount;
+        balances[settlement.paidTo] = (balances[settlement.paidTo] ?? 0) - settlement.amount;
+      }
+
+      // Extract balances between current user and others
+      final myBalance = balances[currentUserId] ?? 0.0;
+      
+      for (var memberId in group.members) {
+        if (memberId == currentUserId) continue;
+        
+        final theirBalance = balances[memberId] ?? 0.0;
+        
+        // Calculate what current user owes/is owed by this person
+        double netBalance = 0.0;
+        if (myBalance < 0 && theirBalance > 0) {
+          // I owe money and they are owed money
+          netBalance = myBalance; // negative = I owe
+        } else if (myBalance > 0 && theirBalance < 0) {
+          // I am owed and they owe money
+          netBalance = myBalance; // positive = they owe me
+        }
+        
+        if (netBalance != 0) {
+          personBalances[memberId] = (personBalances[memberId] ?? 0) + netBalance;
+          personCurrencies[memberId] = currency;
+        }
+      }
+    }
+
+    // Fetch names for all people with balances
+    for (var personId in personBalances.keys) {
+      if (!personNames.containsKey(personId)) {
+        personNames[personId] = await _getUserName(personId);
+      }
+    }
+
+    // Separate into owe and owed lists
+    final List<Map<String, dynamic>> peopleIOwe = [];
+    final List<Map<String, dynamic>> peopleWhoOweMe = [];
+
+    personBalances.forEach((personId, balance) {
+      final data = {
+        'id': personId,
+        'name': personNames[personId] ?? 'Unknown',
+        'amount': balance.abs(),
+        'currency': personCurrencies[personId] ?? 'USD',
+      };
+
+      if (balance < 0) {
+        peopleIOwe.add(data);
+      } else if (balance > 0) {
+        peopleWhoOweMe.add(data);
+      }
+    });
+
+    // Sort by amount (highest first)
+    peopleIOwe.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+    peopleWhoOweMe.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+
+    return {
+      'owe': peopleIOwe,
+      'owed': peopleWhoOweMe,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +273,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _buildGroupsTab(),
           const MembersScreen(),
           _buildExpensesTab(),
-          _buildSettleTab(),
+          _buildAccountTab(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -173,8 +288,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Expenses',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet),
-            label: 'Settle',
+            icon: Icon(Icons.person),
+            label: 'Account',
           ),
         ],
         onTap: (index) {
@@ -668,82 +783,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Quick Actions
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateGroupScreen(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.group_add, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'Add Group',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateMemberScreen(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.person_add, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      'Add Member',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
         // Balance Summary
         StreamBuilder<List<GroupModel>>(
           stream: _groupService.getUserGroups(currentUserId ?? ''),
@@ -917,9 +956,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     return Card(
                       child: InkWell(
                         onTap: () {
-                          setState(() {
-                            _selectedIndex = 4; // Switch to Settle tab
-                          });
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettlementsScreen(),
+                            ),
+                          );
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Padding(
@@ -992,6 +1034,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 16),
                               const Divider(),
                               const SizedBox(height: 8),
+                              
+                              // Top people section
+                              FutureBuilder<Map<String, dynamic>>(
+                                future: _getTopPeople(
+                                  expensesByGroup,
+                                  settlementsByGroup,
+                                  activeGroups,
+                                  currentUserId ?? '',
+                                ),
+                                builder: (context, topPeopleSnapshot) {
+                                  if (!topPeopleSnapshot.hasData) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  
+                                  final topPeople = topPeopleSnapshot.data!;
+                                  final topOwed = topPeople['owed'] as List<Map<String, dynamic>>;
+                                  final topOwe = topPeople['owe'] as List<Map<String, dynamic>>;
+                                  
+                                  if (topOwed.isEmpty && topOwe.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  
+                                  return Column(
+                                    children: [
+                                      if (topOwe.isNotEmpty) ...[
+                                        Text(
+                                          'You owe:',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ...topOwe.take(3).map((person) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 2),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    person['name'],
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: isDark ? Colors.grey[300] : Colors.grey[800],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  AppConstants.formatAmount(
+                                                    person['amount'],
+                                                    person['currency'],
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isDark ? Colors.red[400] : Colors.red[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      if (topOwed.isNotEmpty) ...[
+                                        Text(
+                                          'People who owe you:',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.grey[400] : Colors.grey[700],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ...topOwed.take(3).map((person) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 2),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    person['name'],
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: isDark ? Colors.grey[300] : Colors.grey[800],
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  AppConstants.formatAmount(
+                                                    person['amount'],
+                                                    person['currency'],
+                                                  ),
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isDark ? Colors.green[400] : Colors.green[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                        const SizedBox(height: 12),
+                                      ],
+                                      const Divider(),
+                                      const SizedBox(height: 8),
+                                    ],
+                                  );
+                                },
+                              ),
+                              
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -1022,72 +1181,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Groups Overview
-        StreamBuilder<List<GroupModel>>(
-          stream: _groupService.getUserGroups(currentUserId ?? ''),
-          builder: (context, groupSnapshot) {
-            if (!groupSnapshot.hasData) {
-              return const SizedBox.shrink();
-            }
-
-            final groups = groupSnapshot.data ?? [];
-
-            return GestureDetector(
-              onTap: () {
-                setState(() => _selectedIndex = 1); // Switch to Groups tab
-              },
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Your Groups',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                '${groups.length}',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        groups.isEmpty
-                            ? 'Create your first group to start splitting expenses'
-                            : 'Total members: ${groups.fold<int>(0, (sum, g) => sum + g.members.length)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                      ),
-                    ],
+        // Quick Actions
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Quick Actions',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            );
-          },
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.group_add,
+                        label: 'Add Group',
+                        color: Colors.blue,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CreateGroupScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.person_add,
+                        label: 'Add Member',
+                        color: Colors.green,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CreateMemberScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.receipt_long,
+                        label: 'Add Expense',
+                        color: Colors.orange,
+                        onTap: () {
+                          _showGroupSelectionDialog(); // Direct expense creation
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _QuickActionButton(
+                        icon: Icons.account_balance_wallet,
+                        label: 'Settle',
+                        color: Colors.purple,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettlementsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -1187,45 +1364,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final groupName = group?.name ?? 'Loading...';
                     final currency = group?.currency ?? 'USD';
 
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.1),
-                          child: Icon(
-                            Icons.receipt,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ),
-                        title: Text(
-                          expense.description,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              groupName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    // Fetch payer name if not current user
+                    return FutureBuilder<String>(
+                      future: expense.paidBy == currentUserId
+                          ? Future.value('You')
+                          : _getUserName(expense.paidBy),
+                      builder: (context, payerSnapshot) {
+                        final payerName = payerSnapshot.data ?? 'Loading...';
+
+                        return Card(
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).primaryColor.withOpacity(0.1),
+                              child: Icon(
+                                Icons.receipt,
+                                color: Theme.of(context).primaryColor,
                               ),
                             ),
-                            Text(
-                              '${expense.date.day}/${expense.date.month}/${expense.date.year}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.grey[500] : Colors.grey[500],
-                              ),
+                            title: Text(
+                              expense.description,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                                Text(
+                                  'Paid by $payerName',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: expense.paidBy == currentUserId
+                                        ? (isDark ? Colors.green[400] : Colors.green[700])
+                                        : (isDark ? Colors.blue[300] : Colors.blue[700]),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${expense.date.day}/${expense.date.month}/${expense.date.year}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            trailing: Text(
                               AppConstants.formatAmount(
                                 expense.amount,
                                 currency,
@@ -1235,23 +1426,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text(
-                              expense.paidBy == currentUserId
-                                  ? 'You paid'
-                                  : 'Split',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: expense.paidBy == currentUserId
-                                    ? Colors.green[700]
-                                    : Colors.blue[700],
-                              ),
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          _showExpenseDetailsDialog(expense, group);
-                        },
-                      ),
+                            onTap: () {
+                              _showExpenseDetailsDialog(expense, group);
+                            },
+                            isThreeLine: true,
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -1410,9 +1591,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Theme.of(context).primaryColor.withOpacity(0.1),
                     child: InkWell(
                       onTap: () {
-                        setState(() {
-                          _selectedIndex = 4; // Switch to Settlements tab (index 4)
-                        });
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettlementsScreen(),
+                          ),
+                        );
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
@@ -1604,7 +1788,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       expense.category!,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: Colors.blue[700],
+                                        color: isDark ? Colors.blue[300] : Colors.blue[700],
                                       ),
                                     ),
                                 ],
@@ -1630,8 +1814,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: expense.paidBy == currentUserId
-                                          ? Colors.green[700]
-                                          : Colors.blue[700],
+                                          ? (isDark ? Colors.green[400] : Colors.green[700])
+                                          : (isDark ? Colors.blue[300] : Colors.blue[700]),
                                     ),
                                   ),
                                 ],
@@ -1654,523 +1838,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSettleTab() {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-    return StreamBuilder<List<GroupModel>>(
-      stream: _groupService.getUserGroups(currentUserId ?? ''),
-      builder: (context, groupSnapshot) {
-        if (groupSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (groupSnapshot.hasError) {
-          return Center(child: Text('Error: ${groupSnapshot.error}'));
-        }
-
-        final groups = groupSnapshot.data ?? [];
-
-        if (groups.isEmpty) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet,
-                    size: 80,
-                    color: isDark ? Colors.grey[400] : Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No settlements yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Create groups and add expenses to see who owes whom',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: isDark ? Colors.grey[500] : Colors.grey[500],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: groups.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              // Overall Summary
-              return StreamBuilder<List<ExpenseModel>>(
-                stream: _expenseService.getUserExpenses(currentUserId ?? ''),
-                builder: (context, expenseSnapshot) {
-                  if (!expenseSnapshot.hasData) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final expenses = expenseSnapshot.data ?? [];
-                  final activeGroupIds = groups.map((g) => g.id).toSet();
-
-                  // Filter out expenses from deleted groups
-                  final activeExpenses = expenses
-                      .where((e) => activeGroupIds.contains(e.groupId))
-                      .toList();
-
-                  final Map<String, List<ExpenseModel>> expensesByGroup = {};
-                  for (var expense in activeExpenses) {
-                    if (!expensesByGroup.containsKey(expense.groupId)) {
-                      expensesByGroup[expense.groupId] = [];
-                    }
-                    expensesByGroup[expense.groupId]!.add(expense);
-                  }
-
-                  // Get settlements for all groups
-                  return StreamBuilder<List<SettlementModel>>(
-                    stream: _settlementService.getUserSettlements(
-                      currentUserId ?? '',
-                    ),
-                    builder: (context, allSettlementsSnapshot) {
-                      final allSettlements = allSettlementsSnapshot.data ?? [];
-
-                      // Re-initialize maps inside the settlement StreamBuilder
-                      final Map<String, double> youOweByCurrency = {};
-                      final Map<String, double> youAreOwedByCurrency = {};
-
-                      // Group settlements by groupId
-                      final Map<String, List<SettlementModel>>
-                      settlementsByGroup = {};
-                      for (var settlement in allSettlements) {
-                        if (!settlementsByGroup.containsKey(
-                          settlement.groupId,
-                        )) {
-                          settlementsByGroup[settlement.groupId] = [];
-                        }
-                        settlementsByGroup[settlement.groupId]!.add(settlement);
-                      }
-
-                      for (var groupId in expensesByGroup.keys) {
-                        final groupExpenses = expensesByGroup[groupId]!;
-                        final group = groups.firstWhere((g) => g.id == groupId);
-                        final currency = group.currency;
-                        final groupSettlements =
-                            settlementsByGroup[groupId] ?? [];
-
-                        final balances = <String, double>{};
-                        for (var expense in groupExpenses) {
-                          balances[expense.paidBy] =
-                              (balances[expense.paidBy] ?? 0) + expense.amount;
-                          for (var personId in expense.splitBetween) {
-                            final shareAmount = expense.getShareForUser(
-                              personId,
-                            );
-                            balances[personId] =
-                                (balances[personId] ?? 0) - shareAmount;
-                          }
-                        }
-
-                        // Apply settlements
-                        for (var settlement in groupSettlements) {
-                          balances[settlement.paidBy] =
-                              (balances[settlement.paidBy] ?? 0) +
-                              settlement.amount;
-                          balances[settlement.paidTo] =
-                              (balances[settlement.paidTo] ?? 0) -
-                              settlement.amount;
-                        }
-
-                        final myBalance = balances[currentUserId] ?? 0.0;
-                        if (myBalance < 0) {
-                          youOweByCurrency[currency] =
-                              (youOweByCurrency[currency] ?? 0) + (-myBalance);
-                        } else if (myBalance > 0) {
-                          youAreOwedByCurrency[currency] =
-                              (youAreOwedByCurrency[currency] ?? 0) + myBalance;
-                        }
-                      }
-
-                      final isDark = Theme.of(context).brightness == Brightness.dark;
-                      return Card(
-                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Text(
-                                'Overall Balance',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        if (youOweByCurrency.isEmpty)
-                                          Text(
-                                            AppConstants.formatAmount(0, 'USD'),
-                                            style: const TextStyle(
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.red,
-                                            ),
-                                          )
-                                        else
-                                          ...youOweByCurrency.entries.map(
-                                            (entry) => Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 2,
-                                                  ),
-                                              child: Text(
-                                                AppConstants.formatAmount(
-                                                  entry.value,
-                                                  entry.key,
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize:
-                                                      youOweByCurrency.length >
-                                                          1
-                                                      ? 22
-                                                      : 28,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.red,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        Text(
-                                          'You owe',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    height: 50,
-                                    width: 1,
-                                    color: isDark ? Colors.grey[700] : Colors.grey[300],
-                                  ),
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        if (youAreOwedByCurrency.isEmpty)
-                                          Text(
-                                            AppConstants.formatAmount(0, 'USD'),
-                                            style: const TextStyle(
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.green,
-                                            ),
-                                          )
-                                        else
-                                          ...youAreOwedByCurrency.entries.map(
-                                            (entry) => Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    vertical: 2,
-                                                  ),
-                                              child: Text(
-                                                AppConstants.formatAmount(
-                                                  entry.value,
-                                                  entry.key,
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize:
-                                                      youAreOwedByCurrency
-                                                              .length >
-                                                          1
-                                                      ? 22
-                                                      : 28,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.green,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        Text(
-                                          'You are owed',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            }
-
-            final group = groups[index - 1];
-
-            return StreamBuilder<List<ExpenseModel>>(
-              stream: _expenseService.getGroupExpenses(group.id),
-              builder: (context, expenseSnapshot) {
-                return StreamBuilder<List<SettlementModel>>(
-                  stream: _settlementService.getGroupSettlements(group.id),
-                  builder: (context, settlementSnapshot) {
-                    if (!expenseSnapshot.hasData ||
-                        !settlementSnapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final expenses = expenseSnapshot.data ?? [];
-                    final settlements = settlementSnapshot.data ?? [];
-
-                    if (expenses.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-
-                    // Calculate balances from expenses
-                    final balances = <String, double>{};
-                    for (var expense in expenses) {
-                      balances[expense.paidBy] =
-                          (balances[expense.paidBy] ?? 0) + expense.amount;
-                      for (var personId in expense.splitBetween) {
-                        final shareAmount = expense.getShareForUser(personId);
-                        balances[personId] =
-                            (balances[personId] ?? 0) - shareAmount;
-                      }
-                    }
-
-                    // Apply settlements
-                    for (var settlement in settlements) {
-                      balances[settlement.paidBy] =
-                          (balances[settlement.paidBy] ?? 0) +
-                          settlement.amount;
-                      balances[settlement.paidTo] =
-                          (balances[settlement.paidTo] ?? 0) -
-                          settlement.amount;
-                    }
-
-                    final myBalance = balances[currentUserId] ?? 0.0;
-
-                    if (myBalance == 0) {
-                      return const SizedBox.shrink(); // Skip if settled
-                    }
-
-                    return Card(
-                      child: ExpansionTile(
-                        leading: CircleAvatar(
-                          backgroundColor: myBalance < 0
-                              ? Colors.red.withOpacity(0.1)
-                              : Colors.green.withOpacity(0.1),
-                          child: Icon(
-                            Icons.group,
-                            color: myBalance < 0 ? Colors.red : Colors.green,
-                          ),
-                        ),
-                        title: Text(
-                          group.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          myBalance < 0
-                              ? 'You owe ${AppConstants.formatAmount(-myBalance, group.currency)}'
-                              : 'You are owed ${AppConstants.formatAmount(myBalance, group.currency)}',
-                          style: TextStyle(
-                            color: myBalance < 0
-                                ? Colors.red[700]
-                                : Colors.green[700],
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        trailing: Icon(
-                          myBalance < 0
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
-                          color: myBalance < 0 ? Colors.red : Colors.green,
-                        ),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Group Balances:',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                ...group.members.map((memberId) {
-                                  final balance = balances[memberId] ?? 0.0;
-                                  if (balance == 0)
-                                    return const SizedBox.shrink();
-
-                                  return FutureBuilder<UserModel?>(
-                                    future: () async {
-                                      final doc = await FirebaseFirestore
-                                          .instance
-                                          .collection('users')
-                                          .doc(memberId)
-                                          .get();
-                                      if (doc.exists) {
-                                        return UserModel.fromJson(doc.data()!);
-                                      }
-                                      return null;
-                                    }(),
-                                    builder: (context, userSnapshot) {
-                                      final userName =
-                                          userSnapshot.data?.name ??
-                                          'Loading...';
-
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                CircleAvatar(
-                                                  radius: 16,
-                                                  backgroundColor:
-                                                      Theme.of(context)
-                                                          .primaryColor
-                                                          .withOpacity(0.1),
-                                                  child: Text(
-                                                    userName.isNotEmpty
-                                                        ? userName[0]
-                                                              .toUpperCase()
-                                                        : '?',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: Theme.of(
-                                                        context,
-                                                      ).primaryColor,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Text(
-                                                  memberId == currentUserId
-                                                      ? 'You'
-                                                      : userName,
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            Text(
-                                              balance < 0
-                                                  ? 'owes ${AppConstants.formatAmount(-balance, group.currency)}'
-                                                  : 'gets ${AppConstants.formatAmount(balance, group.currency)}',
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: balance < 0
-                                                    ? Colors.red[700]
-                                                    : Colors.green[700],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  );
-                                }),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        onPressed: () async {
-                                          final result = await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  RecordSettlementScreen(
-                                                    group: group,
-                                                    balances: balances,
-                                                  ),
-                                            ),
-                                          );
-                                          if (result == true) {
-                                            // Settlement recorded, UI will update automatically
-                                          }
-                                        },
-                                        icon: const Icon(
-                                          Icons.check_circle,
-                                          size: 20,
-                                        ),
-                                        label: const Text('Settle Balance'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  GroupDetailsScreen(
-                                                    groupId: group.id,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        icon: const Icon(
-                                          Icons.visibility,
-                                          size: 20,
-                                        ),
-                                        label: const Text('View Details'),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
-    );
+  Widget _buildAccountTab() {
+    return AccountScreen(user: widget.user);
   }
 }
 
@@ -2210,3 +1879,58 @@ class _SummaryItem extends StatelessWidget {
     );
   }
 }
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isDark ? 0.2 : 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: color,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey[300] : Colors.grey[800],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

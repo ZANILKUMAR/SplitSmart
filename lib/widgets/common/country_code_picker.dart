@@ -46,30 +46,30 @@ class CountryCodePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => _showCountryPicker(context),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade400),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               selectedCountry.flag,
-              style: const TextStyle(fontSize: 24),
+              style: const TextStyle(fontSize: 20),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               selectedCountry.dialCode,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.arrow_drop_down, size: 20),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_drop_down, size: 18),
           ],
         ),
       ),
