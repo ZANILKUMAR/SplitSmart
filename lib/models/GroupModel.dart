@@ -10,6 +10,8 @@ class GroupModel {
   final String? imageUrl;
   final String currency; // Currency code (USD, INR, EUR, etc.)
   final bool simplifyDebts; // Simplify group debts setting
+  final int? iconCodePoint; // Icon code point for custom icon
+  final int? colorValue; // Color value for custom color
 
   GroupModel({
     required this.id,
@@ -21,6 +23,8 @@ class GroupModel {
     this.imageUrl,
     this.currency = 'USD', // Default to USD
     this.simplifyDebts = false, // Default to false
+    this.iconCodePoint,
+    this.colorValue,
   });
 
   Map<String, dynamic> toJson() {
@@ -34,10 +38,19 @@ class GroupModel {
       'imageUrl': imageUrl,
       'currency': currency,
       'simplifyDebts': simplifyDebts,
+      'iconCodePoint': iconCodePoint,
+      'colorValue': colorValue,
     };
   }
 
   factory GroupModel.fromJson(Map<String, dynamic> json, String id) {
+    final iconCodePoint = json['iconCodePoint'] as int?;
+    final colorValue = json['colorValue'] as int?;
+    
+    if (iconCodePoint != null || colorValue != null) {
+      print('GroupModel.fromJson: Group ${json['name']} loaded with icon=$iconCodePoint, color=$colorValue');
+    }
+    
     return GroupModel(
       id: id,
       name: json['name'] ?? '',
@@ -48,6 +61,8 @@ class GroupModel {
       imageUrl: json['imageUrl'],
       currency: json['currency'] ?? 'USD',
       simplifyDebts: json['simplifyDebts'] ?? false,
+      iconCodePoint: iconCodePoint,
+      colorValue: colorValue,
     );
   }
 
@@ -61,6 +76,8 @@ class GroupModel {
     String? imageUrl,
     String? currency,
     bool? simplifyDebts,
+    int? iconCodePoint,
+    int? colorValue,
   }) {
     return GroupModel(
       id: id ?? this.id,
@@ -72,6 +89,8 @@ class GroupModel {
       imageUrl: imageUrl ?? this.imageUrl,
       currency: currency ?? this.currency,
       simplifyDebts: simplifyDebts ?? this.simplifyDebts,
+      iconCodePoint: iconCodePoint ?? this.iconCodePoint,
+      colorValue: colorValue ?? this.colorValue,
     );
   }
 }

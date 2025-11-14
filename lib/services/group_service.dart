@@ -13,12 +13,15 @@ class GroupService {
     required String createdBy,
     String? imageUrl,
     String currency = 'USD',
+    int? iconCodePoint,
+    int? colorValue,
   }) async {
     try {
       print('GroupService: Creating group in Firestore...');
       print(
         'GroupService: Name=$name, CreatedBy=$createdBy, Currency=$currency',
       );
+      print('GroupService: IconCodePoint=$iconCodePoint, ColorValue=$colorValue');
 
       // Create group document
       final groupRef = await _firestore.collection('groups').add({
@@ -29,9 +32,12 @@ class GroupService {
         'createdAt': FieldValue.serverTimestamp(),
         'imageUrl': imageUrl,
         'currency': currency,
+        'iconCodePoint': iconCodePoint,
+        'colorValue': colorValue,
       });
 
       print('GroupService: Group created with ID: ${groupRef.id}');
+      print('GroupService: Saved iconCodePoint=$iconCodePoint, colorValue=$colorValue');
       return groupRef.id;
     } catch (e, stackTrace) {
       print('GroupService: Error creating group: $e');

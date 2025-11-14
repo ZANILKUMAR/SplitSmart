@@ -107,13 +107,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     });
 
     if (creditors.isEmpty && debtors.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return Card(
-        color: Colors.green[50],
+        color: isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50],
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green[700]),
+              Icon(
+                Icons.check_circle, 
+                color: isDark ? Colors.green[400] : Colors.green[700],
+              ),
               const SizedBox(width: 12),
               const Expanded(
                 child: Text(
@@ -291,7 +295,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
       color: isCurrentUser
-          ? (isOwing ? Colors.red[50] : Colors.green[50])
+          ? (isOwing 
+              ? (isDark ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50])
+              : (isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50]))
           : (isDark ? Colors.grey[800] : Colors.grey[50]),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -354,7 +360,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: isCurrentUser
-                    ? (isOwing ? Colors.red[700] : Colors.green[700])
+                    ? (isOwing 
+                        ? (isDark ? Colors.red[400] : Colors.red[700])
+                        : (isDark ? Colors.green[400] : Colors.green[700]))
                     : (isDark ? Colors.grey[300] : Colors.grey[800]),
               ),
             ),
@@ -729,16 +737,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                         FirebaseAuth.instance.currentUser?.uid;
                     final myBalance = balances[currentUserId] ?? 0.0;
 
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Balance Summary Card
                         Card(
                           color: myBalance > 0
-                              ? Colors.green[50]
+                              ? (isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50])
                               : myBalance < 0
-                              ? Colors.red[50]
-                              : Colors.blue[50],
+                              ? (isDark ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50])
+                              : (isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50]),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
@@ -764,10 +773,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     color: myBalance > 0
-                                        ? Colors.green[700]
+                                        ? (isDark ? Colors.green[400] : Colors.green[700])
                                         : myBalance < 0
-                                        ? Colors.red[700]
-                                        : Colors.blue[700],
+                                        ? (isDark ? Colors.red[400] : Colors.red[700])
+                                        : (isDark ? Colors.blue[400] : Colors.blue[700]),
                                   ),
                                 ),
                               ],
@@ -852,12 +861,17 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                     ),
                                   ),
                                   if (expense.category != null)
-                                    Text(
-                                      expense.category!,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.blue[700],
-                                      ),
+                                    Builder(
+                                      builder: (context) {
+                                        final isDark = Theme.of(context).brightness == Brightness.dark;
+                                        return Text(
+                                          expense.category!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                          ),
+                                        );
+                                      },
                                     ),
                                 ],
                               ),
@@ -1170,60 +1184,67 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   void _showGroupSettings() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Group Settings'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              title: const Text('Simplify Group Debts'),
-              subtitle: const Text(
-                'Automatically combine debts to reduce the total number of repayments between group members',
-              ),
-              value: _group?.simplifyDebts ?? false,
-              onChanged: (value) async {
-                try {
-                  await _groupService.updateGroup(
-                    widget.groupId,
-                    simplifyDebts: value,
-                  );
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Group Settings'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: const Text('Simplify Group Debts'),
+                subtitle: const Text(
+                  'Automatically combine debts to reduce the total number of repayments between group members',
+                ),
+                value: _group?.simplifyDebts ?? false,
+                onChanged: (value) async {
+                  try {
+                    await _groupService.updateGroup(
+                      widget.groupId,
+                      simplifyDebts: value,
+                    );
 
-                  setState(() {
-                    _group = _group?.copyWith(simplifyDebts: value);
-                  });
+                    // Update both dialog state and parent state
+                    setDialogState(() {
+                      _group = _group?.copyWith(simplifyDebts: value);
+                    });
+                    
+                    setState(() {
+                      _group = _group?.copyWith(simplifyDebts: value);
+                    });
 
-                  if (!context.mounted) return;
+                    if (!context.mounted) return;
 
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        value
-                            ? 'Debt simplification enabled'
-                            : 'Debt simplification disabled',
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          value
+                              ? 'Debt simplification enabled - balances recalculated'
+                              : 'Debt simplification disabled - showing individual debts',
+                        ),
+                        duration: const Duration(seconds: 2),
                       ),
-                    ),
-                  );
-                } catch (e) {
-                  if (!context.mounted) return;
+                    );
+                  } catch (e) {
+                    if (!context.mounted) return;
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: ${e.toString()}'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: ${e.toString()}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }

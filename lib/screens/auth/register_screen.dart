@@ -39,7 +39,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const AppLogo(size: 100, showText: false),
                 const SizedBox(height: 24),
                 Text(
-                  'Join Split Smart',
+                  'Join SplitSmart',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -90,13 +90,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: CustomTextField(
-                        label: 'Phone Number',
+                        label: 'Phone Number (Optional)',
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your phone number';
-                          }
+                          // Phone is now optional, no validation needed
                           return null;
                         },
                       ),
@@ -208,8 +206,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _isLoading = true);
 
       try {
-        // Combine country code with phone number
-        final fullPhoneNumber = '${_selectedCountry.dialCode}${_phoneController.text.trim()}';
+        // Combine country code with phone number (if provided)
+        final phoneText = _phoneController.text.trim();
+        final fullPhoneNumber = phoneText.isNotEmpty 
+            ? '${_selectedCountry.dialCode}$phoneText'
+            : '';
         
         final user = await _authService.registerWithEmailAndPassword(
           _emailController.text.trim(),

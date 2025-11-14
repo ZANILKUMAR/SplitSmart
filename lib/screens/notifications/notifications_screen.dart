@@ -41,15 +41,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   );
                 }
-              } else if (value == 'delete_read') {
-                await _notificationService.deleteReadNotifications(
-                  currentUserId!,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Read notifications deleted')),
-                  );
-                }
               }
             },
             itemBuilder: (context) => [
@@ -60,16 +51,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Icon(Icons.done_all, size: 20),
                     SizedBox(width: 8),
                     Text('Mark all as read'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'delete_read',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_sweep, size: 20),
-                    SizedBox(width: 8),
-                    Text('Delete read'),
                   ],
                 ),
               ),

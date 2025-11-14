@@ -22,7 +22,7 @@ class AppLogo extends StatelessWidget {
           SizedBox(height: size * 0.15),
           // App Name
           Text(
-            'Split Smart',
+            'SplitSmart',
             style: TextStyle(
               fontSize: size * 0.28,
               fontWeight: FontWeight.bold,

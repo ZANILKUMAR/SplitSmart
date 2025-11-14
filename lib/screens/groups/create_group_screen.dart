@@ -76,48 +76,37 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     setState(() => _isSearching = true);
 
     try {
-      // Search by email
-      final emailQuery = await _firestore
-          .collection('users')
-          .where('email', isGreaterThanOrEqualTo: query.toLowerCase())
-          .where('email', isLessThanOrEqualTo: '${query.toLowerCase()}\uf8ff')
-          .limit(10)
-          .get();
-
-      // Search by name
-      final nameQuery = await _firestore
-          .collection('users')
-          .where('name', isGreaterThanOrEqualTo: query)
-          .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-          .limit(10)
-          .get();
-
-      final emailResults = emailQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
-
-      final nameResults = nameQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
-
-      // Combine and remove duplicates
-      final allResults = <String, UserModel>{};
-      for (var user in emailResults) {
-        allResults[user.uid] = user;
-      }
-      for (var user in nameResults) {
-        allResults[user.uid] = user;
-      }
-
-      // Filter out current user and already selected members
       final currentUser = FirebaseAuth.instance.currentUser;
-      final filtered = allResults.values
-          .where(
-            (user) =>
-                user.uid != currentUser?.uid &&
-                !_selectedMembers.any((m) => m.uid == user.uid),
-          )
+      if (currentUser == null) {
+        setState(() => _isSearching = false);
+        return;
+      }
+
+      // Fetch all members created by current user
+      final allMembersQuery = await _firestore
+          .collection('users')
+          .where('createdBy', isEqualTo: currentUser.uid)
+          .get();
+
+      final allMembers = allMembersQuery.docs
+          .map((doc) => UserModel.fromJson(doc.data()))
           .toList();
+
+      // Filter locally by search query (case-insensitive)
+      final queryLower = query.toLowerCase();
+      final filtered = allMembers.where((user) {
+        // Check if already selected
+        if (_selectedMembers.any((m) => m.uid == user.uid)) {
+          return false;
+        }
+
+        // Search in name, email, or phone
+        final matchesName = user.name.toLowerCase().contains(queryLower);
+        final matchesEmail = user.email.toLowerCase().contains(queryLower);
+        final matchesPhone = user.phoneNumber.toLowerCase().contains(queryLower);
+
+        return matchesName || matchesEmail || matchesPhone;
+      }).toList();
 
       setState(() {
         _searchResults = filtered;
@@ -285,11 +274,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       print('Creating group with name: ${_nameController.text.trim()}');
       print('User ID: ${user.uid}');
 
+      print('Creating group with icon: ${_selectedIcon.codePoint} (0x${_selectedIcon.codePoint.toRadixString(16)}), color: ${_selectedColor.value}');
+      print('Selected icon details: ${_selectedIcon.toString()}');
+      
       final groupId = await _groupService.createGroup(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         createdBy: user.uid,
         currency: _selectedCurrency,
+        iconCodePoint: _selectedIcon.codePoint,
+        colorValue: _selectedColor.value,
       );
 
       print('Group created successfully with ID: $groupId');

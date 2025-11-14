@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,6 +16,8 @@ class MembersScreen extends StatefulWidget {
   State<MembersScreen> createState() => _MembersScreenState();
 }
 
+enum MemberFilter { all, outstanding, youOwe, theyOwe }
+
 class _MembersScreenState extends State<MembersScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _groupService = GroupService();
@@ -22,14 +25,18 @@ class _MembersScreenState extends State<MembersScreen> {
   final _settlementService = SettlementService();
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  Timer? _debounceTimer;
+  List<Map<String, dynamic>> _allMembers = [];
+  MemberFilter _selectedFilter = MemberFilter.all;
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  // Get all unique members from all groups the user is part of
+  // Get all unique members from all groups the user is part of AND members created by user
   Stream<List<Map<String, dynamic>>> _getMembersWithBalancesStream() async* {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) {
@@ -54,6 +61,22 @@ class _MembersScreenState extends State<MembersScreen> {
             if (!memberCurrencies.containsKey(memberId)) {
               memberCurrencies[memberId] = group.currency;
             }
+          }
+        }
+      }
+
+      // Also fetch all members created by the current user
+      final createdMembersQuery = await _firestore
+          .collection('users')
+          .where('createdBy', isEqualTo: currentUserId)
+          .get();
+      
+      for (var doc in createdMembersQuery.docs) {
+        final memberId = doc.id;
+        if (memberId != currentUserId) {
+          allMemberIds.add(memberId);
+          if (!memberCurrencies.containsKey(memberId)) {
+            memberCurrencies[memberId] = 'USD'; // Default currency for created members
           }
         }
       }
@@ -98,14 +121,24 @@ class _MembersScreenState extends State<MembersScreen> {
               balances[settlement.paidTo] = (balances[settlement.paidTo] ?? 0) - settlement.amount;
             }
             
-            // Get balance between current user and this member
+            // Get balance between current user and this member in this group
             final myBalance = balances[currentUserId] ?? 0.0;
             final theirBalance = balances[memberId] ?? 0.0;
             
-            // If positive: they owe me, if negative: I owe them
-            if (myBalance > 0 || theirBalance < 0) {
-              totalBalance += myBalance;
-            } else if (theirBalance > 0 || myBalance < 0) {
+            // Balance logic:
+            // myBalance > 0 means I overpaid (others owe me)
+            // myBalance < 0 means I underpaid (I owe others)
+            // theirBalance > 0 means they overpaid (I owe them)
+            // theirBalance < 0 means they underpaid (they owe me)
+            
+            // Calculate who owes whom in this group
+            if (myBalance < 0 && theirBalance > 0) {
+              // I owe money and they are owed money - I owe them
+              // Add negative value to indicate I owe
+              totalBalance -= myBalance.abs();
+            } else if (myBalance > 0 && theirBalance < 0) {
+              // I am owed money and they owe money - they owe me
+              // Add positive value to indicate they owe me
               totalBalance += myBalance;
             }
           }
@@ -132,10 +165,29 @@ class _MembersScreenState extends State<MembersScreen> {
   }
 
   List<Map<String, dynamic>> _filterMembers(List<Map<String, dynamic>> membersWithBalances) {
-    if (_searchQuery.isEmpty) return membersWithBalances;
+    // First apply balance filter
+    List<Map<String, dynamic>> filtered = membersWithBalances;
+    
+    switch (_selectedFilter) {
+      case MemberFilter.all:
+        filtered = membersWithBalances;
+        break;
+      case MemberFilter.outstanding:
+        filtered = membersWithBalances.where((item) => item['balance'] != 0).toList();
+        break;
+      case MemberFilter.youOwe:
+        filtered = membersWithBalances.where((item) => (item['balance'] as double) < 0).toList();
+        break;
+      case MemberFilter.theyOwe:
+        filtered = membersWithBalances.where((item) => (item['balance'] as double) > 0).toList();
+        break;
+    }
+
+    // Then apply search query
+    if (_searchQuery.isEmpty) return filtered;
 
     final query = _searchQuery.toLowerCase();
-    return membersWithBalances.where((item) {
+    return filtered.where((item) {
       final member = item['member'] as UserModel;
       return member.name.toLowerCase().contains(query) ||
           member.email.toLowerCase().contains(query) ||
@@ -230,6 +282,66 @@ class _MembersScreenState extends State<MembersScreen> {
     return Scaffold(
       body: Column(
         children: [
+          // Filter chips - Using StreamBuilder to get live counts
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _getMembersWithBalancesStream(),
+            builder: (context, snapshot) {
+              final allMembers = snapshot.data ?? [];
+              
+              // Update cache when data changes
+              if (snapshot.hasData) {
+                _allMembers = allMembers;
+              }
+              
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  children: [
+                    FilterChip(
+                      label: Text('All (${allMembers.length})'),
+                      selected: _selectedFilter == MemberFilter.all,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = MemberFilter.all;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('Outstanding (${allMembers.where((m) => m['balance'] != 0).length})'),
+                      selected: _selectedFilter == MemberFilter.outstanding,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = MemberFilter.outstanding;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('You owe (${allMembers.where((m) => (m['balance'] as double) < 0).length})'),
+                      selected: _selectedFilter == MemberFilter.youOwe,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = MemberFilter.youOwe;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      label: Text('They owe (${allMembers.where((m) => (m['balance'] as double) > 0).length})'),
+                      selected: _selectedFilter == MemberFilter.theyOwe,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = MemberFilter.theyOwe;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           // Search bar
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -242,8 +354,11 @@ class _MembersScreenState extends State<MembersScreen> {
                     ? IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
+                          _debounceTimer?.cancel();
                           _searchController.clear();
-                          setState(() => _searchQuery = '');
+                          setState(() {
+                            _searchQuery = '';
+                          });
                         },
                       )
                     : null,
@@ -254,34 +369,47 @@ class _MembersScreenState extends State<MembersScreen> {
                 fillColor: Theme.of(context).cardColor,
               ),
               onChanged: (value) {
-                setState(() => _searchQuery = value);
+                // Cancel previous timer
+                _debounceTimer?.cancel();
+                
+                // Start new timer for debouncing (300ms delay)
+                _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                });
               },
             ),
           ),
           // Members list
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _getMembersWithBalancesStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              stream: _getMembersWithBalancesStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}'),
-                ],
-              ),
-            );
-          }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error: ${snapshot.error}'),
+                      ],
+                    ),
+                  );
+                }
 
-          final allMembers = snapshot.data ?? [];
-          final filteredMembers = _filterMembers(allMembers);
+                final allMembers = snapshot.data ?? [];
+                
+                // Update cache when data changes
+                _allMembers = allMembers;
+          
+                // Apply current filter to the latest data
+                final filteredMembers = _filterMembers(_allMembers);
 
           if (allMembers.isEmpty) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -460,8 +588,8 @@ class _MembersScreenState extends State<MembersScreen> {
               );
             },
           );
-        },
-      ),
+              },
+            ),
           ),
         ],
       ),

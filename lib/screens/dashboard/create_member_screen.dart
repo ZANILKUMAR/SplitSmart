@@ -19,6 +19,7 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
   final _phoneController = TextEditingController();
   final _firestore = FirebaseFirestore.instance;
   bool _isLoading = false;
+  bool _isImportingContacts = false;
   CountryCode _selectedCountry = CountryCodePicker.countries[0]; // Default to India
 
   @override
@@ -42,10 +43,47 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
       return;
     }
 
+    // Prevent multiple clicks
+    if (_isImportingContacts) return;
+
+    setState(() {
+      _isImportingContacts = true;
+    });
+
     try {
+      // Show loading indicator immediately
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async => false,
+            child: const AlertDialog(
+              content: Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 20),
+                  Expanded(
+                    child: Text(
+                      'Loading contacts...',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
       // Request permission
       final permission = await FlutterContacts.requestPermission();
       if (!permission) {
+        // Close loading dialog
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -65,49 +103,16 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
 
       if (!mounted) return;
 
-      // Show contact selection dialog
+      // Show contact selection dialog with search
       final selectedContact = await showDialog<Contact>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Select Contact'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: ListView.builder(
-              itemCount: contacts.length,
-              itemBuilder: (context, index) {
-                final contact = contacts[index];
-                final phone = contact.phones.isNotEmpty
-                    ? contact.phones.first.number
-                    : 'No phone';
-                final email = contact.emails.isNotEmpty
-                    ? contact.emails.first.address
-                    : '';
-
-                return ListTile(
-                  leading: CircleAvatar(
-                    child: Text(
-                      contact.displayName.isNotEmpty
-                          ? contact.displayName[0].toUpperCase()
-                          : '?',
-                    ),
-                  ),
-                  title: Text(contact.displayName),
-                  subtitle: Text('$phone${email.isNotEmpty ? '\n$email' : ''}'),
-                  isThreeLine: email.isNotEmpty,
-                  onTap: () => Navigator.pop(context, contact),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
+        builder: (context) => _ContactSelectionDialog(contacts: contacts),
       );
+
+      // Close loading dialog
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
 
       if (selectedContact != null) {
         // Pre-fill form with contact data
@@ -120,6 +125,11 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
         }
       }
     } catch (e) {
+      // Close loading dialog if open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -127,6 +137,12 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingContacts = false;
+        });
       }
     }
   }
@@ -242,9 +258,18 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
               // Import from Contacts button (only on mobile)
               if (!kIsWeb) ...[
                 ElevatedButton.icon(
-                  onPressed: _importFromContacts,
-                  icon: const Icon(Icons.contacts),
-                  label: const Text('Import from Contacts'),
+                  onPressed: _isImportingContacts ? null : _importFromContacts,
+                  icon: _isImportingContacts
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.contacts),
+                  label: Text(_isImportingContacts ? 'Loading...' : 'Import from Contacts'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -272,25 +297,28 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Email field (mandatory)
+              // Email field
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
-                  labelText: 'Email *',
+                  labelText: 'Email',
                   hintText: 'Enter email address',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email),
+                  helperText: 'Email or Phone (at least one required)',
                 ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   final email = value?.trim() ?? '';
+                  final phone = _phoneController.text.trim();
                   
-                  if (email.isEmpty) {
-                    return 'Please enter an email address';
+                  // Check if both are empty
+                  if (email.isEmpty && phone.isEmpty) {
+                    return 'Please provide either email or phone';
                   }
                   
-                  // Validate email format
-                  if (!email.contains('@')) {
+                  // Validate email format if provided
+                  if (email.isNotEmpty && !email.contains('@')) {
                     return 'Please enter a valid email';
                   }
                   return null;
@@ -298,7 +326,7 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Phone field with country code (optional)
+              // Phone field with country code
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -315,13 +343,25 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
                     child: TextFormField(
                       controller: _phoneController,
                       decoration: const InputDecoration(
-                        labelText: 'Phone Number (Optional)',
+                        labelText: 'Phone Number',
                         hintText: 'Enter phone number',
                         border: OutlineInputBorder(),
+                        helperText: 'Email or Phone (at least one required)',
                       ),
                       keyboardType: TextInputType.phone,
                       validator: (value) {
-                        // Phone is optional, so no validation needed
+                        final phone = value?.trim() ?? '';
+                        final email = _emailController.text.trim();
+                        
+                        // Check if both are empty
+                        if (phone.isEmpty && email.isEmpty) {
+                          return 'Please provide either email or phone';
+                        }
+                        
+                        // Validate phone format if provided (basic check)
+                        if (phone.isNotEmpty && phone.length < 10) {
+                          return 'Phone must be at least 10 digits';
+                        }
                         return null;
                       },
                     ),
@@ -351,6 +391,195 @@ class _CreateMemberScreenState extends State<CreateMemberScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Contact Selection Dialog with Search
+class _ContactSelectionDialog extends StatefulWidget {
+  final List<Contact> contacts;
+
+  const _ContactSelectionDialog({required this.contacts});
+
+  @override
+  State<_ContactSelectionDialog> createState() => _ContactSelectionDialogState();
+}
+
+class _ContactSelectionDialogState extends State<_ContactSelectionDialog> {
+  final _searchController = TextEditingController();
+  List<Contact> _filteredContacts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredContacts = widget.contacts;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterContacts(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredContacts = widget.contacts;
+      } else {
+        final queryLower = query.toLowerCase();
+        _filteredContacts = widget.contacts.where((contact) {
+          final nameLower = contact.displayName.toLowerCase();
+          final phone = contact.phones.isNotEmpty
+              ? contact.phones.first.number.toLowerCase()
+              : '';
+          final email = contact.emails.isNotEmpty
+              ? contact.emails.first.address.toLowerCase()
+              : '';
+          
+          return nameLower.contains(queryLower) ||
+                 phone.contains(queryLower) ||
+                 email.contains(queryLower);
+        }).toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Select Contact'),
+              const Spacer(),
+              Text(
+                '${widget.contacts.length}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search contacts...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 20),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterContacts('');
+                      },
+                    )
+                  : null,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              isDense: true,
+            ),
+            onChanged: _filterContacts,
+          ),
+        ],
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: _filteredContacts.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.search_off,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No contacts found',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    if (_searchController.text.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Try a different search term',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            : ListView.builder(
+                itemCount: _filteredContacts.length,
+                itemBuilder: (context, index) {
+                  final contact = _filteredContacts[index];
+                  final phone = contact.phones.isNotEmpty
+                      ? contact.phones.first.number
+                      : 'No phone';
+                  final email = contact.emails.isNotEmpty
+                      ? contact.emails.first.address
+                      : '';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.2),
+                      child: Text(
+                        contact.displayName.isNotEmpty
+                            ? contact.displayName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: Theme.of(context).primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(contact.displayName),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(phone),
+                        if (email.isNotEmpty)
+                          Text(
+                            email,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                      ],
+                    ),
+                    isThreeLine: email.isNotEmpty,
+                    onTap: () => Navigator.pop(context, contact),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

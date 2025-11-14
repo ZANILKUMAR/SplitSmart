@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/auth/auth_wrapper.dart';
 import 'constants/app_theme.dart';
 import 'providers/theme_provider.dart';
 
@@ -35,10 +35,10 @@ class MyApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'Split Smart',
+          title: 'SplitSmart',
           theme: selectedTheme,
           themeMode: themeProvider.themeMode,
-          home: const LoginScreen(),
+          home: const AuthWrapper(),
           debugShowCheckedModeBanner: false,
         );
       },
