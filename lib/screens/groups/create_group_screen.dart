@@ -274,11 +274,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       print('Creating group with name: ${_nameController.text.trim()}');
       print('User ID: ${user.uid}');
 
+      print('Creating group with icon: ${_selectedIcon.codePoint} (0x${_selectedIcon.codePoint.toRadixString(16)}), color: ${_selectedColor.value}');
+      print('Selected icon details: ${_selectedIcon.toString()}');
+      
       final groupId = await _groupService.createGroup(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         createdBy: user.uid,
         currency: _selectedCurrency,
+        iconCodePoint: _selectedIcon.codePoint,
+        colorValue: _selectedColor.value,
       );
 
       print('Group created successfully with ID: $groupId');

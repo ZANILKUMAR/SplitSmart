@@ -30,30 +30,49 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
     setState(() => _isAuthenticating = true);
 
     try {
+      // Check if biometric is still available
+      final isAvailable = await _biometricService.isBiometricAvailable();
+      if (!isAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric authentication is not available'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        // Bypass biometric if not available
+        widget.onAuthenticated();
+        return;
+      }
+
       final authenticated = await _biometricService.authenticate(
-        reason: 'Please authenticate to access Split Smart',
+        reason: 'Authenticate to access SplitSmart',
       );
 
-      if (authenticated) {
-        widget.onAuthenticated();
-      } else {
-        setState(() => _isAuthenticating = false);
-        if (mounted) {
+      if (mounted) {
+        if (authenticated) {
+          widget.onAuthenticated();
+        } else {
+          setState(() => _isAuthenticating = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Authentication failed. Please try again.'),
               backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
             ),
           );
         }
       }
     } catch (e) {
-      setState(() => _isAuthenticating = false);
+      print('Authentication error: $e');
       if (mounted) {
+        setState(() => _isAuthenticating = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -108,7 +127,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
 
                   // App Name
                   const Text(
-                    'Split Smart',
+                    'SplitSmart',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../models/UserModel.dart';
 import '../../models/GroupModel.dart';
 import '../../models/ExpenseModel.dart';
@@ -21,8 +22,7 @@ import '../notifications/notifications_screen.dart';
 import '../members/members_screen.dart';
 import '../account/account_screen.dart';
 import 'create_member_screen.dart';
-import '../settings/theme_settings_screen.dart';
-import '../settings/about_screen.dart';
+
 import '../../services/notification_service.dart';
 import '../../constants/currencies.dart';
 
@@ -42,6 +42,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _settlementService = SettlementService();
   final _notificationService = NotificationService();
   int _selectedIndex = 0;
+
+  // Category icons map
+  final Map<String, IconData> _categoryIcons = {
+    'Food & Drinks': Icons.restaurant,
+    'Transportation': Icons.directions_car,
+    'Accommodation': Icons.hotel,
+    'Entertainment': Icons.movie,
+    'Shopping': Icons.shopping_bag,
+    'Utilities': Icons.bolt,
+    'Healthcare': Icons.medical_services,
+    'Other': Icons.more_horiz,
+  };
+
+  IconData _getCategoryIcon(String? category) {
+    return _categoryIcons[category] ?? Icons.receipt;
+  }
 
   // Helper method to get user name
   Future<String> _getUserName(String userId) async {
@@ -169,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Split Smart'),
+          title: const Text('SplitSmart'),
           actions: [
           StreamBuilder<int>(
             stream: _notificationService.getUnreadNotificationsCount(
@@ -229,26 +245,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Icon(Icons.person, size: 20),
                     SizedBox(width: 8),
                     Text('Profile'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'theme',
-                child: Row(
-                  children: [
-                    Icon(Icons.palette, size: 20),
-                    SizedBox(width: 8),
-                    Text('Theme Settings'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'about',
-                child: Row(
-                  children: [
-                    Icon(Icons.info, size: 20),
-                    SizedBox(width: 8),
-                    Text('About'),
                   ],
                 ),
               ),
@@ -333,18 +329,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ProfileScreen()),
-        );
-        break;
-      case 'theme':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const ThemeSettingsScreen()),
-        );
-        break;
-      case 'about':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AboutScreen()),
         );
         break;
       case 'logout':
@@ -1372,64 +1356,81 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       builder: (context, payerSnapshot) {
                         final payerName = payerSnapshot.data ?? 'Loading...';
 
+                        // Calculate user's share - handle null safety
+                        final myShare = currentUserId != null 
+                            ? expense.getShareForUser(currentUserId)
+                            : 0.0;
+                        
                         return Card(
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).primaryColor.withOpacity(0.1),
-                              child: Icon(
-                                Icons.receipt,
-                                color: Theme.of(context).primaryColor,
-                              ),
+                            leading: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getCategoryIcon(expense.category),
+                                  color: Theme.of(context).primaryColor,
+                                  size: 26,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat('MMM d').format(expense.date),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                    height: 1.0,
+                                  ),
+                                ),
+                              ],
                             ),
                             title: Text(
                               expense.description,
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  groupName,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  ),
-                                ),
-                                Text(
-                                  'Paid by $payerName',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: expense.paidBy == currentUserId
-                                        ? (isDark ? Colors.green[400] : Colors.green[700])
-                                        : (isDark ? Colors.blue[300] : Colors.blue[700]),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  '${expense.date.day}/${expense.date.month}/${expense.date.year}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? Colors.grey[500] : Colors.grey[500],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            trailing: Text(
-                              AppConstants.formatAmount(
-                                expense.amount,
-                                currency,
+                            subtitle: Text(
+                              groupName,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
                               ),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                            ),
+                            trailing: SizedBox(
+                              width: 95,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    AppConstants.formatAmount(
+                                      myShare,
+                                      currency,
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Paid by $payerName',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      height: 1.0,
+                                      color: expense.paidBy == currentUserId
+                                          ? (isDark ? Colors.green[400] : Colors.green[700])
+                                          : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ),
                             onTap: () {
                               _showExpenseDetailsDialog(expense, group);
                             },
-                            isThreeLine: true,
                           ),
                         );
                       },
@@ -1748,82 +1749,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                           final groupName = group?.name ?? 'Loading...';
                           final currency = group?.currency ?? 'USD';
+                          
+                          // Calculate user's share - handle null safety
+                          final myShare = currentUserId != null
+                              ? expense.getShareForUser(currentUserId)
+                              : 0.0;
 
-                          return Card(
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).primaryColor.withOpacity(0.1),
-                                child: Icon(
-                                  Icons.receipt,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              title: Text(
-                                expense.description,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
+                          return FutureBuilder<String>(
+                            future: expense.paidBy == currentUserId
+                                ? Future.value('You')
+                                : _getUserName(expense.paidBy),
+                            builder: (context, payerSnapshot) {
+                              final payerName = payerSnapshot.data ?? 'Loading...';
+
+                              return Card(
+                                child: ListTile(
+                                  leading: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _getCategoryIcon(expense.category),
+                                        color: Theme.of(context).primaryColor,
+                                        size: 26,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        DateFormat('MMM d').format(expense.date),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                          height: 1.0,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  title: Text(
+                                    expense.description,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  subtitle: Text(
                                     groupName,
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: isDark ? Colors.grey[400] : Colors.grey[600],
                                     ),
                                   ),
-                                  Text(
-                                    '${expense.date.day}/${expense.date.month}/${expense.date.year}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isDark ? Colors.grey[500] : Colors.grey[500],
+                                  trailing: SizedBox(
+                                    width: 95,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          AppConstants.formatAmount(
+                                            myShare,
+                                            currency,
+                                          ),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Paid by $payerName',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            height: 1.0,
+                                            color: expense.paidBy == currentUserId
+                                                ? (isDark ? Colors.green[400] : Colors.green[700])
+                                                : (isDark ? Colors.grey[500] : Colors.grey[500]),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (expense.category != null)
-                                    Text(
-                                      expense.category!,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: isDark ? Colors.blue[300] : Colors.blue[700],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    AppConstants.formatAmount(
-                                      expense.amount,
-                                      currency,
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    expense.paidBy == currentUserId
-                                        ? 'You paid'
-                                        : '${AppConstants.formatAmount(expense.getShareAmount(), currency)} your share',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: expense.paidBy == currentUserId
-                                          ? (isDark ? Colors.green[400] : Colors.green[700])
-                                          : (isDark ? Colors.blue[300] : Colors.blue[700]),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              onTap: () {
-                                _showExpenseDetailsDialog(expense, group);
-                              },
-                            ),
+                                  onTap: () {
+                                    _showExpenseDetailsDialog(expense, group);
+                                  },
+                                ),
+                              );
+                            },
                           );
                         },
                       );

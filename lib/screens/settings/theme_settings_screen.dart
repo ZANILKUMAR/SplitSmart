@@ -39,7 +39,7 @@ class ThemeSettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Choose how Split Smart looks to you',
+                    'Choose how SplitSmart looks to you',
                     style: TextStyle(
                       fontSize: 14,
                       color: Theme.of(context).brightness == Brightness.dark

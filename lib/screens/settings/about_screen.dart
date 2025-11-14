@@ -74,7 +74,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Split Smart',
+                  'SplitSmart',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -141,7 +141,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Split Smart helps you easily track shared expenses and split bills with friends, family, or roommates. Keep everyone on the same page and settle up effortlessly.',
+                    'SplitSmart helps you easily track shared expenses and split bills with friends, family, or roommates. Keep everyone on the same page and settle up effortlessly.',
                     style: TextStyle(
                       fontSize: 15,
                       height: 1.5,
@@ -251,7 +251,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '© 2025 Split Smart. All rights reserved.',
+                    '© 2025 SplitSmart. All rights reserved.',
                     style: TextStyle(
                       fontSize: 13,
                       color: isDark ? Colors.grey[500] : Colors.grey[600],
@@ -404,7 +404,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     onTap: () {
                       showLicensePage(
                         context: context,
-                        applicationName: 'Split Smart',
+                        applicationName: 'SplitSmart',
                         applicationVersion: _appVersion,
                         applicationIcon: Icon(
                           Icons.account_balance_wallet,
@@ -490,7 +490,7 @@ class _AboutScreenState extends State<AboutScreen> {
               ),
               const Text(
                 '1. Acceptance of Terms\n'
-                'By using Split Smart, you agree to these terms of service.\n\n'
+                'By using SplitSmart, you agree to these terms of service.\n\n'
                 '2. User Accounts\n'
                 'You are responsible for maintaining the security of your account.\n\n'
                 '3. User Content\n'
@@ -500,7 +500,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 '5. Modifications\n'
                 'We reserve the right to modify these terms at any time.\n\n'
                 '6. Limitation of Liability\n'
-                'Split Smart is provided "as is" without warranties of any kind.',
+                'SplitSmart is provided "as is" without warranties of any kind.',
                 style: TextStyle(fontSize: 14),
               ),
             ],

@@ -35,7 +35,7 @@ class MyApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'Split Smart',
+          title: 'SplitSmart',
           theme: selectedTheme,
           themeMode: themeProvider.themeMode,
           home: const AuthWrapper(),

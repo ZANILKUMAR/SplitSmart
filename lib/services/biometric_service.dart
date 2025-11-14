@@ -45,16 +45,22 @@ class BiometricService {
   }) async {
     try {
       final isAvailable = await isBiometricAvailable();
-      if (!isAvailable) return false;
+      if (!isAvailable) {
+        print('Biometric not available');
+        return false;
+      }
 
       return await _localAuth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: true,
+          biometricOnly: false, // Allow fallback to device credentials
+          useErrorDialogs: true,
+          sensitiveTransaction: false,
         ),
       );
     } catch (e) {
+      print('Biometric authentication error: $e');
       return false;
     }
   }

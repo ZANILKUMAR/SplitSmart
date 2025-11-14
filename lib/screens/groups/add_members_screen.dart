@@ -83,19 +83,59 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
           .where('createdBy', isEqualTo: currentUser.uid)
           .get();
 
-      final allMembers = allMembersQuery.docs
-          .map((doc) => UserModel.fromJson(doc.data()))
-          .toList();
+      final Set<String> allMemberIds = {};
+      final Map<String, UserModel> memberMap = {};
 
-      // Filter out members already in the group for display
+      // Add members created by current user
+      for (var doc in allMembersQuery.docs) {
+        final member = UserModel.fromJson(doc.data());
+        allMemberIds.add(member.uid);
+        memberMap[member.uid] = member;
+      }
+
+      // Also fetch all members from all groups the user is part of
+      final userGroupsQuery = await _firestore
+          .collection('groups')
+          .where('members', arrayContains: currentUser.uid)
+          .get();
+
+      for (var groupDoc in userGroupsQuery.docs) {
+        final groupData = groupDoc.data();
+        final memberIds = List<String>.from(groupData['members'] ?? []);
+        
+        for (var memberId in memberIds) {
+          if (memberId != currentUser.uid && !allMemberIds.contains(memberId)) {
+            // Fetch this member's details
+            try {
+              final memberDoc = await _firestore.collection('users').doc(memberId).get();
+              if (memberDoc.exists) {
+                final member = UserModel.fromJson(memberDoc.data()!);
+                allMemberIds.add(member.uid);
+                memberMap[member.uid] = member;
+              }
+            } catch (e) {
+              print('Error fetching member $memberId: $e');
+            }
+          }
+        }
+      }
+
+      final allMembers = memberMap.values.toList();
+
+      // Separate members into those in group and those not
       final availableMembers = allMembers
           .where((user) => !widget.group.members.contains(user.uid))
           .toList();
 
+      print('AddMembersScreen: Total unique members: ${allMembers.length}');
+      print('AddMembersScreen: Current group members: ${widget.group.members.length}');
+      print('AddMembersScreen: Available to add: ${availableMembers.length}');
+
       if (mounted) {
         setState(() {
-          // Store all created members for search
+          // Store all created members for search AND display
           _allCreatedMembers = allMembers;
+          // Show only members NOT already in the group in "All Members" section
           _allMembers = availableMembers;
           _isLoading = false;
         });
