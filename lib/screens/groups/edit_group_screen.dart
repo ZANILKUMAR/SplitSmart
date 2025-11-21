@@ -57,8 +57,13 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
     _descriptionController = TextEditingController(
       text: widget.group.description,
     );
-    _selectedIcon = Icons.group;
-    _selectedColor = Colors.blue;
+    // Load icon and color from existing group
+    _selectedIcon = widget.group.iconCodePoint != null
+        ? IconData(widget.group.iconCodePoint!)
+        : Icons.group;
+    _selectedColor = widget.group.colorValue != null
+        ? Color(widget.group.colorValue!)
+        : Colors.blue;
     _selectedCurrency = widget.group.currency;
   }
 
@@ -208,6 +213,8 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         currency: _selectedCurrency,
+        iconCodePoint: _selectedIcon.codePoint,
+        colorValue: _selectedColor.value,
       );
 
       if (mounted) {
@@ -349,7 +356,7 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
 
               // Currency Selection
               DropdownButtonFormField<String>(
-                value: _selectedCurrency,
+                initialValue: _selectedCurrency,
                 decoration: const InputDecoration(
                   labelText: 'Currency',
                   prefixIcon: Icon(Icons.monetization_on),

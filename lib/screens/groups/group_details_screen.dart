@@ -436,15 +436,25 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           width: 60,
                           height: 60,
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.1),
+                            color: Color(
+                              _group!.colorValue ?? Colors.blue.value,
+                            ).withOpacity(0.2),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Color(
+                                _group!.colorValue ?? Colors.blue.value,
+                              ),
+                              width: 2,
+                            ),
                           ),
                           child: Icon(
-                            Icons.group,
+                            _group!.iconCodePoint != null
+                                ? IconData(_group!.iconCodePoint!)
+                                : Icons.group,
                             size: 32,
-                            color: Theme.of(context).primaryColor,
+                            color: Color(
+                              _group!.colorValue ?? Colors.blue.value,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -835,29 +845,58 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               title: Text(
                                 expense.description,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Paid by ${payer.name}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? Colors.grey[300]
-                                          : Colors.grey[700],
+                                  const SizedBox(height: 6),
+                                  RichText(
+                                    text: TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: '${payer.name} paid ',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w400,
+                                            color: Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.grey[500]
+                                                : Colors.grey[600],
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: AppConstants.formatAmount(
+                                            expense.amount,
+                                            _group!.currency,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Theme.of(context).primaryColor,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
+                                  const SizedBox(height: 4),
                                   Text(
                                     '${expense.date.day}/${expense.date.month}/${expense.date.year}',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w400,
                                       color: Theme.of(context).brightness == Brightness.dark
                                           ? Colors.grey[500]
                                           : Colors.grey[500],
+                                      height: 1.3,
                                     ),
                                   ),
                                   if (expense.category != null)
@@ -867,8 +906,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                         return Text(
                                           expense.category!,
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
                                             color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                            height: 1.3,
                                           ),
                                         );
                                       },
@@ -878,24 +919,35 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
+                                    expense.paidBy == currentUserId
+                                        ? 'You lent'
+                                        : 'You borrowed',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      height: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                      color: expense.paidBy == currentUserId
+                                          ? (Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.green[400]
+                                              : Colors.green[700])
+                                          : (Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.red[400]
+                                              : Colors.red[700]),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
                                     AppConstants.formatAmount(
-                                      expense.amount,
+                                      shareAmount,
                                       _group!.currency,
                                     ),
                                     style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${AppConstants.formatAmount(shareAmount, _group!.currency)} your share',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600],
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
                                     ),
                                   ),
                                 ],

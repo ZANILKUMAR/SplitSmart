@@ -27,7 +27,9 @@ class _MembersScreenState extends State<MembersScreen> {
   String _searchQuery = '';
   Timer? _debounceTimer;
   List<Map<String, dynamic>> _allMembers = [];
+  List<Map<String, dynamic>> _cachedMembers = [];
   MemberFilter _selectedFilter = MemberFilter.all;
+  bool _isSearching = false;
 
   @override
   void dispose() {
@@ -51,13 +53,12 @@ class _MembersScreenState extends State<MembersScreen> {
 
       // Get all unique member IDs from all groups
       final Set<String> allMemberIds = {};
-      final Map<String, String> memberCurrencies = {}; // Store primary currency for each member
+      final Map<String, String> memberCurrencies = {};
       
       for (var group in groups) {
         for (var memberId in group.members) {
           if (memberId != currentUserId) {
             allMemberIds.add(memberId);
-            // Store the first currency we see for each member (could be from any group)
             if (!memberCurrencies.containsKey(memberId)) {
               memberCurrencies[memberId] = group.currency;
             }
@@ -66,91 +67,96 @@ class _MembersScreenState extends State<MembersScreen> {
       }
 
       // Also fetch all members created by the current user
-      final createdMembersQuery = await _firestore
-          .collection('users')
-          .where('createdBy', isEqualTo: currentUserId)
-          .get();
-      
-      for (var doc in createdMembersQuery.docs) {
-        final memberId = doc.id;
-        if (memberId != currentUserId) {
-          allMemberIds.add(memberId);
-          if (!memberCurrencies.containsKey(memberId)) {
-            memberCurrencies[memberId] = 'USD'; // Default currency for created members
+      try {
+        final createdMembersQuery = await _firestore
+            .collection('users')
+            .where('createdBy', isEqualTo: currentUserId)
+            .limit(500) // Limit to prevent excessive reads
+            .get();
+        
+        for (var doc in createdMembersQuery.docs) {
+          final memberId = doc.id;
+          if (memberId != currentUserId) {
+            allMemberIds.add(memberId);
+            if (!memberCurrencies.containsKey(memberId)) {
+              memberCurrencies[memberId] = 'USD';
+            }
           }
         }
+      } catch (e) {
+        print('Error fetching created members: $e');
       }
 
-      // Fetch user details for all members
+      // Fetch user details for all members - Use batch operations
       final List<Map<String, dynamic>> membersWithBalances = [];
       
-      for (var memberId in allMemberIds) {
-        try {
-          final userDoc = await _firestore.collection('users').doc(memberId).get();
-          if (!userDoc.exists) continue;
-          
-          final userData = userDoc.data()!;
-          final member = UserModel.fromJson({...userData, 'uid': memberId});
+      // Process in batches to avoid excessive reads
+      final memberIdsList = allMemberIds.toList();
+      const batchSize = 10;
+      
+      for (int i = 0; i < memberIdsList.length; i += batchSize) {
+        final batch = memberIdsList.sublist(
+          i,
+          i + batchSize > memberIdsList.length ? memberIdsList.length : i + batchSize,
+        );
 
-          // Calculate balance with this member across all groups
-          double totalBalance = 0.0;
-          String primaryCurrency = memberCurrencies[memberId] ?? 'USD';
-          
-          // Group expenses and settlements by group to calculate balances
-          for (var group in groups) {
-            if (!group.members.contains(memberId)) continue;
+        final futures = batch.map((memberId) async {
+          try {
+            final userDoc = await _firestore.collection('users').doc(memberId).get();
+            if (!userDoc.exists) return null;
             
-            final groupExpenses = expenses.where((e) => e.groupId == group.id).toList();
-            final groupSettlements = settlements.where((s) => s.groupId == group.id).toList();
+            final userData = userDoc.data()!;
+            final member = UserModel.fromJson({...userData, 'uid': memberId});
+
+            // Fast balance calculation - only sum up group balances
+            double totalBalance = 0.0;
+            String primaryCurrency = memberCurrencies[memberId] ?? 'USD';
             
-            // Calculate balance for this specific group
-            final Map<String, double> balances = {};
-            
-            // Process expenses
-            for (var expense in groupExpenses) {
-              balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
-              for (var personId in expense.splitBetween) {
-                final shareAmount = expense.getShareForUser(personId);
-                balances[personId] = (balances[personId] ?? 0) - shareAmount;
+            for (var group in groups) {
+              if (!group.members.contains(memberId)) continue;
+              
+              final groupExpenses = expenses.where((e) => e.groupId == group.id).toList();
+              final groupSettlements = settlements.where((s) => s.groupId == group.id).toList();
+              
+              // Quick balance calculation
+              final Map<String, double> balances = {};
+              
+              for (var expense in groupExpenses) {
+                balances[expense.paidBy] = (balances[expense.paidBy] ?? 0) + expense.amount;
+                for (var personId in expense.splitBetween) {
+                  final shareAmount = expense.getShareForUser(personId);
+                  balances[personId] = (balances[personId] ?? 0) - shareAmount;
+                }
+              }
+              
+              for (var settlement in groupSettlements) {
+                balances[settlement.paidBy] = (balances[settlement.paidBy] ?? 0) + settlement.amount;
+                balances[settlement.paidTo] = (balances[settlement.paidTo] ?? 0) - settlement.amount;
+              }
+              
+              final myBalance = balances[currentUserId] ?? 0.0;
+              final theirBalance = balances[memberId] ?? 0.0;
+              
+              if (myBalance < 0 && theirBalance > 0) {
+                totalBalance -= myBalance.abs();
+              } else if (myBalance > 0 && theirBalance < 0) {
+                totalBalance += myBalance;
               }
             }
-            
-            // Apply settlements
-            for (var settlement in groupSettlements) {
-              balances[settlement.paidBy] = (balances[settlement.paidBy] ?? 0) + settlement.amount;
-              balances[settlement.paidTo] = (balances[settlement.paidTo] ?? 0) - settlement.amount;
-            }
-            
-            // Get balance between current user and this member in this group
-            final myBalance = balances[currentUserId] ?? 0.0;
-            final theirBalance = balances[memberId] ?? 0.0;
-            
-            // Balance logic:
-            // myBalance > 0 means I overpaid (others owe me)
-            // myBalance < 0 means I underpaid (I owe others)
-            // theirBalance > 0 means they overpaid (I owe them)
-            // theirBalance < 0 means they underpaid (they owe me)
-            
-            // Calculate who owes whom in this group
-            if (myBalance < 0 && theirBalance > 0) {
-              // I owe money and they are owed money - I owe them
-              // Add negative value to indicate I owe
-              totalBalance -= myBalance.abs();
-            } else if (myBalance > 0 && theirBalance < 0) {
-              // I am owed money and they owe money - they owe me
-              // Add positive value to indicate they owe me
-              totalBalance += myBalance;
-            }
-          }
 
-          membersWithBalances.add({
-            'member': member,
-            'balance': totalBalance,
-            'currency': primaryCurrency,
-          });
-        } catch (e) {
-          print('Error fetching member $memberId: $e');
-        }
+            return {
+              'member': member,
+              'balance': totalBalance,
+              'currency': primaryCurrency,
+            };
+          } catch (e) {
+            print('Error processing member: $e');
+            return null;
+          }
+        });
+
+        final results = await Future.wait(futures);
+        membersWithBalances.addAll(results.whereType<Map<String, dynamic>>());
       }
 
       // Sort by name
@@ -183,12 +189,13 @@ class _MembersScreenState extends State<MembersScreen> {
         break;
     }
 
-    // Then apply search query
+    // Then apply search query - optimized search
     if (_searchQuery.isEmpty) return filtered;
 
     final query = _searchQuery.toLowerCase();
     return filtered.where((item) {
       final member = item['member'] as UserModel;
+      // Short-circuit evaluation: stop checking once a match is found
       return member.name.toLowerCase().contains(query) ||
           member.email.toLowerCase().contains(query) ||
           member.phoneNumber.toLowerCase().contains(query);

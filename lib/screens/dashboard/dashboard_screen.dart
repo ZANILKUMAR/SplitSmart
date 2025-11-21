@@ -185,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('SplitSmart'),
+          title: const Text('Splitzo'),
           actions: [
           StreamBuilder<int>(
             stream: _notificationService.getUnreadNotificationsCount(
@@ -212,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       top: 8,
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.red,
                           shape: BoxShape.circle,
                         ),
@@ -775,22 +775,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               stream: _expenseService.getUserExpenses(currentUserId ?? ''),
               builder: (context, expenseSnapshot) {
                 if (!expenseSnapshot.hasData) {
-                  return Card(
+                  return const Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          const Text(
+                          Text(
                             'Your Balance',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: const [
+                            children: [
                               _SummaryItem(
                                 title: 'You owe',
                                 amount: '\$0.00',
@@ -982,8 +982,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   final owe = youOweByCurrency[currency] ?? 0.0;
                                   final owed =
                                       youAreOwedByCurrency[currency] ?? 0.0;
-                                  if (owe == 0 && owed == 0)
+                                  if (owe == 0 && owed == 0) {
                                     return const SizedBox.shrink();
+                                  }
 
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(
@@ -1386,14 +1387,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ),
                             title: Text(
                               expense.description,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              groupName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 4),
+                                Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    height: 1.3,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 6),
+                                RichText(
+                                  text: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: '$payerName paid ',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w400,
+                                          color: isDark ? Colors.grey[500] : Colors.grey[600],
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: AppConstants.formatAmount(expense.amount, currency),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Theme.of(context).primaryColor,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                             trailing: SizedBox(
                               width: 95,
@@ -1403,27 +1447,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
+                                    expense.paidBy == currentUserId
+                                        ? 'You lent'
+                                        : 'You borrowed',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      height: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                      color: expense.paidBy == currentUserId
+                                          ? (isDark ? Colors.green[400] : Colors.green[700])
+                                          : (isDark ? Colors.red[400] : Colors.red[700]),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
                                     AppConstants.formatAmount(
                                       myShare,
                                       currency,
                                     ),
                                     style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      height: 1.0,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
                                     ),
-                                  ),
-                                  Text(
-                                    'Paid by $payerName',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      height: 1.0,
-                                      color: expense.paidBy == currentUserId
-                                          ? (isDark ? Colors.green[400] : Colors.green[700])
-                                          : (isDark ? Colors.grey[500] : Colors.grey[500]),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
@@ -1788,15 +1836,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   title: Text(
                                     expense.description,
                                     style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.2,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  subtitle: Text(
-                                    groupName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                    ),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        groupName,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                          height: 1.3,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: '$payerName paid ',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w400,
+                                                color: isDark ? Colors.grey[500] : Colors.grey[600],
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: AppConstants.formatAmount(expense.amount, currency),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: Theme.of(context).primaryColor,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
                                   ),
                                   trailing: SizedBox(
                                     width: 95,
@@ -1806,27 +1895,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
+                                          expense.paidBy == currentUserId
+                                              ? 'You lent'
+                                              : 'You borrowed',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            height: 1.2,
+                                            fontWeight: FontWeight.w600,
+                                            color: expense.paidBy == currentUserId
+                                                ? (isDark ? Colors.green[400] : Colors.green[700])
+                                                : (isDark ? Colors.red[400] : Colors.red[700]),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
                                           AppConstants.formatAmount(
                                             myShare,
                                             currency,
                                           ),
                                           style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            height: 1.0,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.2,
                                           ),
-                                        ),
-                                        Text(
-                                          'Paid by $payerName',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            height: 1.0,
-                                            color: expense.paidBy == currentUserId
-                                                ? (isDark ? Colors.green[400] : Colors.green[700])
-                                                : (isDark ? Colors.grey[500] : Colors.grey[500]),
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),

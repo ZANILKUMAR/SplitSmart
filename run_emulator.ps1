@@ -1,7 +1,7 @@
 # Run on Android Emulator
 # This script runs the app on Android emulator
 
-Write-Host "SplitSmart - Running on Android Emulator" -ForegroundColor Cyan
+Write-Host "Splitzo - Running on Android Emulator" -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan
 
 Write-Host "`nChecking for Android emulator..." -ForegroundColor Yellow

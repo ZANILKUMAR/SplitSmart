@@ -111,6 +111,8 @@ class GroupService {
     String? imageUrl,
     String? currency,
     bool? simplifyDebts,
+    int? iconCodePoint,
+    int? colorValue,
   }) async {
     try {
       final updates = <String, dynamic>{};
@@ -119,8 +121,12 @@ class GroupService {
       if (imageUrl != null) updates['imageUrl'] = imageUrl;
       if (currency != null) updates['currency'] = currency;
       if (simplifyDebts != null) updates['simplifyDebts'] = simplifyDebts;
+      if (iconCodePoint != null) updates['iconCodePoint'] = iconCodePoint;
+      if (colorValue != null) updates['colorValue'] = colorValue;
 
       await _firestore.collection('groups').doc(groupId).update(updates);
+      
+      print('GroupService: Group $groupId updated with iconCodePoint=$iconCodePoint, colorValue=$colorValue');
     } catch (e) {
       throw Exception('Failed to update group: $e');
     }

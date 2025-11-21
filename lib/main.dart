@@ -35,7 +35,7 @@ class MyApp extends StatelessWidget {
         }
 
         return MaterialApp(
-          title: 'SplitSmart',
+          title: 'Splitzo',
           theme: selectedTheme,
           themeMode: themeProvider.themeMode,
           home: const AuthWrapper(),

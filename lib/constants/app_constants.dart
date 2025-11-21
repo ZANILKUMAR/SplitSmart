@@ -7,5 +7,5 @@ class AppColors {
 }
 
 class AppStrings {
-  static const appName = 'SplitSmart';
+  static const appName = 'Splitzo';
 }
