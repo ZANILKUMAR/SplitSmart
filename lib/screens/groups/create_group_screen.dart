@@ -22,7 +22,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   bool _isLoading = false;
   bool _isSearching = false;
 
-  List<UserModel> _selectedMembers = [];
+  final List<UserModel> _selectedMembers = [];
   List<UserModel> _searchResults = [];
 
   // Group icons
@@ -436,7 +436,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
               // Currency Selection
               DropdownButtonFormField<String>(
-                value: _selectedCurrency,
+                initialValue: _selectedCurrency,
                 decoration: const InputDecoration(
                   labelText: 'Currency',
                   prefixIcon: Icon(Icons.monetization_on),

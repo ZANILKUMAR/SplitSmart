@@ -99,21 +99,19 @@ class AppTheme {
       primary: primarySwatch.shade400,
       secondary: primarySwatch.shade300,
       surface: const Color(0xFF1E1E1E),
-      background: const Color(0xFF121212),
       error: Colors.red.shade400,
       onPrimary: Colors.white,
       onSecondary: Colors.white,
       onSurface: Colors.white,
-      onBackground: Colors.white,
       onError: Colors.white,
     ),
-    appBarTheme: AppBarTheme(
-      backgroundColor: const Color(0xFF1E1E1E),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Color(0xFF1E1E1E),
       elevation: 1,
       centerTitle: true,
       foregroundColor: Colors.white,
-      iconTheme: const IconThemeData(color: Colors.white),
-      titleTextStyle: const TextStyle(
+      iconTheme: IconThemeData(color: Colors.white),
+      titleTextStyle: TextStyle(
         color: Colors.white,
         fontSize: 20,
         fontWeight: FontWeight.w600,
@@ -296,15 +294,15 @@ class AppTheme {
       contentTextStyle: const TextStyle(color: Colors.white),
       actionTextColor: primarySwatch.shade300,
     ),
-    listTileTheme: ListTileThemeData(
+    listTileTheme: const ListTileThemeData(
       textColor: Colors.white,
       iconColor: Colors.white,
-      titleTextStyle: const TextStyle(
+      titleTextStyle: TextStyle(
         color: Colors.white,
         fontSize: 16,
         fontWeight: FontWeight.w500,
       ),
-      subtitleTextStyle: const TextStyle(
+      subtitleTextStyle: TextStyle(
         color: Colors.white70,
         fontSize: 14,
       ),
@@ -341,7 +339,7 @@ class AppTheme {
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: const Color(0xFFE0E7EF), width: 1),
+        side: const BorderSide(color: Color(0xFFE0E7EF), width: 1),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
@@ -387,8 +385,8 @@ class AppTheme {
       type: BottomNavigationBarType.fixed,
       elevation: 4,
     ),
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: const Color(0xFF64B5F6),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: Color(0xFF64B5F6),
       foregroundColor: Colors.white,
       elevation: 3,
     ),

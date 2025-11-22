@@ -745,7 +745,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Welcome back,',
+                            'Welcome,',
                             style: TextStyle(
                               fontSize: 14,
                               color: isDark ? Colors.grey[400] : Colors.grey[600],

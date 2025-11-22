@@ -17,7 +17,7 @@ class SplitWalletLogoPainter extends CustomPainter {
     final accentColor = isDark
         ? const Color(0xFF4CAF50)
         : const Color(0xFF2196F3);
-    final highlightColor = Colors.white;
+    const highlightColor = Colors.white;
 
     final paint = Paint()
       ..style = PaintingStyle.fill

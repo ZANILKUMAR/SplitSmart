@@ -969,85 +969,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             const SizedBox(height: 24),
 
             // Settlements Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Settlements',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _group == null
-                      ? null
-                      : () async {
-                          try {
-                            // Calculate current balances
-                            final expenses = await _expenseService
-                                .getGroupExpenses(widget.groupId)
-                                .first;
-                            final settlements = await _settlementService
-                                .getGroupSettlements(widget.groupId)
-                                .first;
-
-                            final balances = <String, double>{};
-                            for (var expense in expenses) {
-                              balances[expense.paidBy] =
-                                  (balances[expense.paidBy] ?? 0) +
-                                  expense.amount;
-                              for (var personId in expense.splitBetween) {
-                                final shareAmount = expense.getShareForUser(
-                                  personId,
-                                );
-                                balances[personId] =
-                                    (balances[personId] ?? 0) - shareAmount;
-                              }
-                            }
-
-                            // Apply settlements
-                            for (var settlement in settlements) {
-                              balances[settlement.paidBy] =
-                                  (balances[settlement.paidBy] ?? 0) +
-                                  settlement.amount;
-                              balances[settlement.paidTo] =
-                                  (balances[settlement.paidTo] ?? 0) -
-                                  settlement.amount;
-                            }
-
-                            if (!mounted) return;
-
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => RecordSettlementScreen(
-                                  group: _group!,
-                                  balances: balances,
-                                ),
-                              ),
-                            );
-
-                            if (result == true && mounted) {
-                              _loadGroupDetails();
-                            }
-                          } catch (e) {
-                            print('Error opening settle screen: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                  icon: const Icon(Icons.check_circle, size: 18),
-                  label: const Text('Settle'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    minimumSize: const Size(110, 36),
-                  ),
-                ),
-              ],
+            const Text(
+              'Settlements',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -1167,22 +1091,99 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             ),
           ],
         ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddExpenseScreen(group: _group!),
-            ),
-          );
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Settle button (above Add Expense)
+          FloatingActionButton.extended(
+            onPressed: () async {
+              // Get current balances from group expenses and settlements
+              try {
+                // Calculate current balances
+                final expenses = await _expenseService
+                    .getGroupExpenses(widget.groupId)
+                    .first;
+                final settlements = await _settlementService
+                    .getGroupSettlements(widget.groupId)
+                    .first;
 
-          if (result == true) {
-            // Reload group details after adding expense
-            _loadGroupDetails();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
+                final balances = <String, double>{};
+                for (var expense in expenses) {
+                  balances[expense.paidBy] =
+                      (balances[expense.paidBy] ?? 0) +
+                      expense.amount;
+                  for (var personId in expense.splitBetween) {
+                    final shareAmount = expense.getShareForUser(
+                      personId,
+                    );
+                    balances[personId] =
+                        (balances[personId] ?? 0) - shareAmount;
+                  }
+                }
+
+                // Apply settlements to update balances
+                for (var settlement in settlements) {
+                  balances[settlement.paidBy] =
+                      (balances[settlement.paidBy] ?? 0) +
+                      settlement.amount;
+                  balances[settlement.paidTo] =
+                      (balances[settlement.paidTo] ?? 0) -
+                      settlement.amount;
+                }
+
+                if (mounted) {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RecordSettlementScreen(
+                        group: _group!,
+                        balances: balances,
+                      ),
+                    ),
+                  );
+
+                  if (result == true) {
+                    // Reload group details after recording settlement
+                    _loadGroupDetails();
+                  }
+                }
+              } catch (e) {
+                print('Error opening settle screen: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.done_all),
+            label: const Text('Settle'),
+            backgroundColor: Colors.green,
+          ),
+          const SizedBox(height: 16),
+          // Add Expense button (below Settle)
+          FloatingActionButton.extended(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddExpenseScreen(group: _group!),
+                ),
+              );
+
+              if (result == true) {
+                // Reload group details after adding expense
+                _loadGroupDetails();
+              }
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add Expense'),
+          ),
+        ],
       ),
     );
   }
