@@ -1,7 +1,7 @@
 # Simple Run Script
 # Automatically detects and runs on available device
 
-Write-Host "SplitSmart - Starting App..." -ForegroundColor Cyan
+Write-Host "Splitzo - Starting App..." -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
 Write-Host "`nChecking available devices..." -ForegroundColor Yellow

@@ -256,7 +256,7 @@ class _AccountScreenState extends State<AccountScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('About SplitSmart'),
+              title: const Text('About Splitzo'),
               subtitle: const Text('Version, licenses, and more'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {

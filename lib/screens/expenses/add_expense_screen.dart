@@ -34,8 +34,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   List<UserModel> _members = [];
   bool _isLoadingMembers = true;
   SplitType _splitType = SplitType.equal;
-  Map<String, TextEditingController> _customAmountControllers = {};
-  Map<String, TextEditingController> _percentageControllers = {};
+  final Map<String, TextEditingController> _customAmountControllers = {};
+  final Map<String, TextEditingController> _percentageControllers = {};
   bool _showAllPaidByMembers = false;
 
   final List<String> _categories = [
@@ -628,7 +628,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             // Category
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Category (Optional)',
                 prefixIcon: Icon(Icons.category),

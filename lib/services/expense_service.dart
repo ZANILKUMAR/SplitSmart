@@ -137,8 +137,9 @@ class ExpenseService {
       if (date != null) updates['date'] = Timestamp.fromDate(date);
       if (category != null) updates['category'] = category;
       if (notes != null) updates['notes'] = notes;
-      if (splitType != null)
+      if (splitType != null) {
         updates['splitType'] = splitType.toString().split('.').last;
+      }
       if (customSplits != null) updates['customSplits'] = customSplits;
 
       await _firestore.collection('expenses').doc(expenseId).update(updates);

@@ -35,19 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 const AppLogo(size: 120, showText: true),
                 const SizedBox(height: 48),
                 CustomTextField(
-                  label: 'Email or Mobile Number',
+                  label: 'Email',
                   controller: _emailOrPhoneController,
-                  keyboardType: TextInputType.text,
+                  keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your email or mobile number';
+                      return 'Please enter your email';
                     }
-                    // Check if it's an email or phone number
-                    final isEmail = value.contains('@');
-                    final isPhone = RegExp(r'^[0-9+\-\s()]+$').hasMatch(value);
-                    
-                    if (!isEmail && !isPhone) {
-                      return 'Please enter a valid email or mobile number';
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
                     }
                     return null;
                   },
@@ -426,7 +422,6 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> with Singl
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
                             hintText: 'Enter your email',
                             prefixIcon: Icon(Icons.email),
                             border: OutlineInputBorder(),
@@ -483,7 +478,6 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> with Singl
                                 controller: _phoneController,
                                 keyboardType: TextInputType.phone,
                                 decoration: const InputDecoration(
-                                  labelText: 'Phone Number',
                                   hintText: 'Enter phone number',
                                   border: OutlineInputBorder(),
                                 ),

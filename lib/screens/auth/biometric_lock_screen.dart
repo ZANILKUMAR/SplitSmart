@@ -47,7 +47,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
       }
 
       final authenticated = await _biometricService.authenticate(
-        reason: 'Authenticate to access SplitSmart',
+        reason: 'Authenticate to access Splitzo',
       );
 
       if (mounted) {
@@ -127,7 +127,7 @@ class _BiometricLockScreenState extends State<BiometricLockScreen> {
 
                   // App Name
                   const Text(
-                    'SplitSmart',
+                    'Splitzo',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

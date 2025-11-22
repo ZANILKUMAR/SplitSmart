@@ -11,18 +11,27 @@ class AppLogo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Logo Image
-        Image.asset(
-          'assets/logo.png',
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
+        // Logo Image with rounded container
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(size * 0.15),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey[900]
+                : Colors.grey[100],
+          ),
+          padding: EdgeInsets.all(size * 0.1),
+          child: Image.asset(
+            'assets/logo.png',
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+          ),
         ),
         if (showText) ...[
           SizedBox(height: size * 0.15),
           // App Name
           Text(
-            'SplitSmart',
+            'Splitzo',
             style: TextStyle(
               fontSize: size * 0.28,
               fontWeight: FontWeight.bold,

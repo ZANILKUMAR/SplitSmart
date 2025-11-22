@@ -374,6 +374,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('\n==== GroupDetailsScreen.build() ====');
+    print('_isLoading: $_isLoading, _group: ${_group?.name}, _members: ${_members.length}');
+    
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Group Details')),
@@ -418,11 +421,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadGroupDetails,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
             // Group Info Card
             Card(
               child: Padding(
@@ -436,15 +437,25 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           width: 60,
                           height: 60,
                           decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.1),
+                            color: Color(
+                              _group!.colorValue ?? Colors.blue.value,
+                            ).withOpacity(0.2),
                             shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Color(
+                                _group!.colorValue ?? Colors.blue.value,
+                              ),
+                              width: 2,
+                            ),
                           ),
                           child: Icon(
-                            Icons.group,
+                            _group!.iconCodePoint != null
+                                ? IconData(_group!.iconCodePoint!, fontFamily: 'MaterialIcons')
+                                : Icons.group,
                             size: 32,
-                            color: Theme.of(context).primaryColor,
+                            color: Color(
+                              _group!.colorValue ?? Colors.blue.value,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -835,29 +846,58 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               title: Text(
                                 expense.description,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Paid by ${payer.name}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? Colors.grey[300]
-                                          : Colors.grey[700],
+                                  const SizedBox(height: 6),
+                                  RichText(
+                                    text: TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: '${payer.name} paid ',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w400,
+                                            color: Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.grey[500]
+                                                : Colors.grey[600],
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: AppConstants.formatAmount(
+                                            expense.amount,
+                                            _group!.currency,
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Theme.of(context).primaryColor,
+                                            height: 1.3,
+                                          ),
+                                        ),
+                                      ],
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
+                                  const SizedBox(height: 4),
                                   Text(
                                     '${expense.date.day}/${expense.date.month}/${expense.date.year}',
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w400,
                                       color: Theme.of(context).brightness == Brightness.dark
                                           ? Colors.grey[500]
                                           : Colors.grey[500],
+                                      height: 1.3,
                                     ),
                                   ),
                                   if (expense.category != null)
@@ -867,8 +907,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                                         return Text(
                                           expense.category!,
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
                                             color: isDark ? Colors.blue[300] : Colors.blue[700],
+                                            height: 1.3,
                                           ),
                                         );
                                       },
@@ -878,24 +920,35 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
+                                    expense.paidBy == currentUserId
+                                        ? 'You lent'
+                                        : 'You borrowed',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      height: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                      color: expense.paidBy == currentUserId
+                                          ? (Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.green[400]
+                                              : Colors.green[700])
+                                          : (Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.red[400]
+                                              : Colors.red[700]),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
                                     AppConstants.formatAmount(
-                                      expense.amount,
+                                      shareAmount,
                                       _group!.currency,
                                     ),
                                     style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${AppConstants.formatAmount(shareAmount, _group!.currency)} your share',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Theme.of(context).brightness == Brightness.dark
-                                          ? Colors.grey[400]
-                                          : Colors.grey[600],
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
                                     ),
                                   ),
                                 ],
@@ -916,85 +969,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             const SizedBox(height: 24),
 
             // Settlements Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Settlements',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _group == null
-                      ? null
-                      : () async {
-                          try {
-                            // Calculate current balances
-                            final expenses = await _expenseService
-                                .getGroupExpenses(widget.groupId)
-                                .first;
-                            final settlements = await _settlementService
-                                .getGroupSettlements(widget.groupId)
-                                .first;
-
-                            final balances = <String, double>{};
-                            for (var expense in expenses) {
-                              balances[expense.paidBy] =
-                                  (balances[expense.paidBy] ?? 0) +
-                                  expense.amount;
-                              for (var personId in expense.splitBetween) {
-                                final shareAmount = expense.getShareForUser(
-                                  personId,
-                                );
-                                balances[personId] =
-                                    (balances[personId] ?? 0) - shareAmount;
-                              }
-                            }
-
-                            // Apply settlements
-                            for (var settlement in settlements) {
-                              balances[settlement.paidBy] =
-                                  (balances[settlement.paidBy] ?? 0) +
-                                  settlement.amount;
-                              balances[settlement.paidTo] =
-                                  (balances[settlement.paidTo] ?? 0) -
-                                  settlement.amount;
-                            }
-
-                            if (!mounted) return;
-
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => RecordSettlementScreen(
-                                  group: _group!,
-                                  balances: balances,
-                                ),
-                              ),
-                            );
-
-                            if (result == true && mounted) {
-                              _loadGroupDetails();
-                            }
-                          } catch (e) {
-                            print('Error opening settle screen: $e');
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                  icon: const Icon(Icons.check_circle, size: 18),
-                  label: const Text('Settle'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    minimumSize: const Size(110, 36),
-                  ),
-                ),
-              ],
+            const Text(
+              'Settlements',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -1114,23 +1091,99 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddExpenseScreen(group: _group!),
-            ),
-          );
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Settle button (above Add Expense)
+          FloatingActionButton.extended(
+            onPressed: () async {
+              // Get current balances from group expenses and settlements
+              try {
+                // Calculate current balances
+                final expenses = await _expenseService
+                    .getGroupExpenses(widget.groupId)
+                    .first;
+                final settlements = await _settlementService
+                    .getGroupSettlements(widget.groupId)
+                    .first;
 
-          if (result == true) {
-            // Reload group details after adding expense
-            _loadGroupDetails();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Add Expense'),
+                final balances = <String, double>{};
+                for (var expense in expenses) {
+                  balances[expense.paidBy] =
+                      (balances[expense.paidBy] ?? 0) +
+                      expense.amount;
+                  for (var personId in expense.splitBetween) {
+                    final shareAmount = expense.getShareForUser(
+                      personId,
+                    );
+                    balances[personId] =
+                        (balances[personId] ?? 0) - shareAmount;
+                  }
+                }
+
+                // Apply settlements to update balances
+                for (var settlement in settlements) {
+                  balances[settlement.paidBy] =
+                      (balances[settlement.paidBy] ?? 0) +
+                      settlement.amount;
+                  balances[settlement.paidTo] =
+                      (balances[settlement.paidTo] ?? 0) -
+                      settlement.amount;
+                }
+
+                if (mounted) {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RecordSettlementScreen(
+                        group: _group!,
+                        balances: balances,
+                      ),
+                    ),
+                  );
+
+                  if (result == true) {
+                    // Reload group details after recording settlement
+                    _loadGroupDetails();
+                  }
+                }
+              } catch (e) {
+                print('Error opening settle screen: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.done_all),
+            label: const Text('Settle'),
+            backgroundColor: Colors.green,
+          ),
+          const SizedBox(height: 16),
+          // Add Expense button (below Settle)
+          FloatingActionButton.extended(
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddExpenseScreen(group: _group!),
+                ),
+              );
+
+              if (result == true) {
+                // Reload group details after adding expense
+                _loadGroupDetails();
+              }
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add Expense'),
+          ),
+        ],
       ),
     );
   }

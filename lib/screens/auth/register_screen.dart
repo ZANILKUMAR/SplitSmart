@@ -39,7 +39,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const AppLogo(size: 100, showText: false),
                 const SizedBox(height: 24),
                 Text(
-                  'Join SplitSmart',
+                  'Join Splitzo',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

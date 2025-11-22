@@ -804,92 +804,111 @@ class _AddMembersScreenState extends State<AddMembersScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Create New Member'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Name *',
-                    hintText: 'Enter full name',
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  textCapitalization: TextCapitalization.words,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter email address',
-                    prefixIcon: Icon(Icons.email),
-                    helperText: 'Email or Phone (at least one required)',
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Country Code Dropdown (smaller)
-                    SizedBox(
-                      width: 100,
-                      child: DropdownButtonFormField<String>(
-                        value: selectedCountryCode,
-                        decoration: const InputDecoration(
-                          labelText: 'Code',
-                          prefixIcon: Icon(Icons.flag, size: 20),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: '+1', child: Text('+1')),
-                          DropdownMenuItem(value: '+44', child: Text('+44')),
-                          DropdownMenuItem(value: '+91', child: Text('+91')),
-                          DropdownMenuItem(value: '+86', child: Text('+86')),
-                          DropdownMenuItem(value: '+81', child: Text('+81')),
-                          DropdownMenuItem(value: '+61', child: Text('+61')),
-                          DropdownMenuItem(value: '+49', child: Text('+49')),
-                          DropdownMenuItem(value: '+33', child: Text('+33')),
-                          DropdownMenuItem(value: '+39', child: Text('+39')),
-                          DropdownMenuItem(value: '+34', child: Text('+34')),
-                          DropdownMenuItem(value: '+7', child: Text('+7')),
-                          DropdownMenuItem(value: '+55', child: Text('+55')),
-                          DropdownMenuItem(value: '+52', child: Text('+52')),
-                          DropdownMenuItem(value: '+82', child: Text('+82')),
-                          DropdownMenuItem(value: '+65', child: Text('+65')),
-                          DropdownMenuItem(value: '+971', child: Text('+971')),
-                          DropdownMenuItem(value: '+966', child: Text('+966')),
-                          DropdownMenuItem(value: '+27', child: Text('+27')),
-                          DropdownMenuItem(value: '+234', child: Text('+234')),
-                          DropdownMenuItem(value: '+254', child: Text('+254')),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            selectedCountryCode = value!;
-                          });
-                        },
-                        isExpanded: true,
-                        isDense: true,
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Instruction text
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Text(
+                      'Email or Phone (at least one required)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontStyle: FontStyle.italic,
                       ),
+                      textAlign: TextAlign.left,
                     ),
-                    const SizedBox(width: 12),
-                    // Phone Number Field (larger)
-                    Expanded(
-                      child: TextField(
-                        controller: phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'Mobile Number',
-                          hintText: 'Enter mobile number',
-                          helperText: 'Email or Phone (at least one required)',
+                  ),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Name *',
+                      hintText: 'Enter full name',
+                      prefixIcon: Icon(Icons.person),
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'Enter email address',
+                      prefixIcon: Icon(Icons.email),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Country Code Dropdown (smaller)
+                      SizedBox(
+                        width: 110,
+                        child: DropdownButtonFormField<String>(
+                          initialValue: selectedCountryCode,
+                          decoration: const InputDecoration(
+                            labelText: 'Code',
+                            prefixIcon: Icon(Icons.flag, size: 20),
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                            isDense: true,
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '+1', child: Text('+1')),
+                            DropdownMenuItem(value: '+44', child: Text('+44')),
+                            DropdownMenuItem(value: '+91', child: Text('+91')),
+                            DropdownMenuItem(value: '+86', child: Text('+86')),
+                            DropdownMenuItem(value: '+81', child: Text('+81')),
+                            DropdownMenuItem(value: '+61', child: Text('+61')),
+                            DropdownMenuItem(value: '+49', child: Text('+49')),
+                            DropdownMenuItem(value: '+33', child: Text('+33')),
+                            DropdownMenuItem(value: '+39', child: Text('+39')),
+                            DropdownMenuItem(value: '+34', child: Text('+34')),
+                            DropdownMenuItem(value: '+7', child: Text('+7')),
+                            DropdownMenuItem(value: '+55', child: Text('+55')),
+                            DropdownMenuItem(value: '+52', child: Text('+52')),
+                            DropdownMenuItem(value: '+82', child: Text('+82')),
+                            DropdownMenuItem(value: '+65', child: Text('+65')),
+                            DropdownMenuItem(value: '+971', child: Text('+971')),
+                            DropdownMenuItem(value: '+966', child: Text('+966')),
+                            DropdownMenuItem(value: '+27', child: Text('+27')),
+                            DropdownMenuItem(value: '+234', child: Text('+234')),
+                            DropdownMenuItem(value: '+254', child: Text('+254')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              selectedCountryCode = value!;
+                            });
+                          },
+                          isExpanded: false,
                         ),
-                        keyboardType: TextInputType.phone,
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      // Phone Number Field (larger)
+                      Expanded(
+                        child: TextField(
+                          controller: phoneController,
+                          decoration: const InputDecoration(
+                            labelText: 'Mobile Number',
+                            hintText: 'Enter mobile number',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [

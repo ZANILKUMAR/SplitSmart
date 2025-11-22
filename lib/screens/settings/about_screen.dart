@@ -74,7 +74,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'SplitSmart',
+                  'Splitzo',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -141,7 +141,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'SplitSmart helps you easily track shared expenses and split bills with friends, family, or roommates. Keep everyone on the same page and settle up effortlessly.',
+                    'Splitzo helps you easily track shared expenses and split bills with friends, family, or roommates. Keep everyone on the same page and settle up effortlessly.',
                     style: TextStyle(
                       fontSize: 15,
                       height: 1.5,
@@ -251,7 +251,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '© 2025 SplitSmart. All rights reserved.',
+                    '© 2025 Splitzo. All rights reserved.',
                     style: TextStyle(
                       fontSize: 13,
                       color: isDark ? Colors.grey[500] : Colors.grey[600],
@@ -295,11 +295,11 @@ class _AboutScreenState extends State<AboutScreen> {
                       color: Theme.of(context).primaryColor,
                     ),
                     title: const Text('Email Support'),
-                    subtitle: const Text('support@splitsmart.app'),
+                    subtitle: const Text('support@splitzo.app'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     contentPadding: EdgeInsets.zero,
                     onTap: () {
-                      _launchURL('mailto:support@splitsmart.app');
+                      _launchURL('mailto:support@splitzo.app');
                     },
                   ),
                   const Divider(),
@@ -313,7 +313,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     contentPadding: EdgeInsets.zero,
                     onTap: () {
-                      _launchURL('mailto:support@splitsmart.app?subject=Bug Report');
+                      _launchURL('mailto:support@splitzo.app?subject=Bug Report');
                     },
                   ),
                   const Divider(),
@@ -404,7 +404,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     onTap: () {
                       showLicensePage(
                         context: context,
-                        applicationName: 'SplitSmart',
+                        applicationName: 'Splitzo',
                         applicationVersion: _appVersion,
                         applicationIcon: Icon(
                           Icons.account_balance_wallet,
@@ -479,18 +479,18 @@ class _AboutScreenState extends State<AboutScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Terms of Service'),
-        content: SingleChildScrollView(
+        content: const SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Last Updated: November 2025\n\n',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const Text(
+              Text(
                 '1. Acceptance of Terms\n'
-                'By using SplitSmart, you agree to these terms of service.\n\n'
+                'By using Splitzo, you agree to these terms of service.\n\n'
                 '2. User Accounts\n'
                 'You are responsible for maintaining the security of your account.\n\n'
                 '3. User Content\n'
@@ -500,7 +500,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 '5. Modifications\n'
                 'We reserve the right to modify these terms at any time.\n\n'
                 '6. Limitation of Liability\n'
-                'SplitSmart is provided "as is" without warranties of any kind.',
+                'Splitzo is provided "as is" without warranties of any kind.',
                 style: TextStyle(fontSize: 14),
               ),
             ],
@@ -521,16 +521,16 @@ class _AboutScreenState extends State<AboutScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Privacy Policy'),
-        content: SingleChildScrollView(
+        content: const SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'Last Updated: November 2025\n\n',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const Text(
+              Text(
                 '1. Information We Collect\n'
                 '• Account information (name, email)\n'
                 '• Expense and group data\n'
@@ -546,7 +546,7 @@ class _AboutScreenState extends State<AboutScreen> {
                 '5. Your Rights\n'
                 'You can access, modify, or delete your data at any time.\n\n'
                 '6. Contact Us\n'
-                'For privacy concerns, contact us at support@splitsmart.app',
+                'For privacy concerns, contact us at support@splitzo.app',
                 style: TextStyle(fontSize: 14),
               ),
             ],

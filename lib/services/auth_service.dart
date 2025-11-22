@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart';
 import '../models/UserModel.dart';
 
 class AuthException implements Exception {
@@ -11,7 +12,14 @@ class AuthException implements Exception {
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  GoogleSignIn? _googleSignIn;
+
+  AuthService() {
+    // Initialize GoogleSignIn only on native platforms
+    if (!kIsWeb) {
+      _googleSignIn = GoogleSignIn();
+    }
+  }
 
   // Get current user
   UserModel? get currentUser {
@@ -147,16 +155,22 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     await _auth.signOut();
-    await _googleSignIn.signOut();
+    if (!kIsWeb && _googleSignIn != null) {
+      await _googleSignIn!.signOut();
+    }
   }
 
   // Sign in with Google
   Future<UserModel?> signInWithGoogle() async {
+    if (kIsWeb || _googleSignIn == null) {
+      throw AuthException('Google Sign-In is not available on this platform');
+    }
+    
     try {
       print('AuthService: Attempting Google Sign-In');
       
       // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
       
       if (googleUser == null) {
         // User canceled the sign-in

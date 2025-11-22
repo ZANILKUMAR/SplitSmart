@@ -1,11 +1,11 @@
-# SplitSmart App Runner Script (PowerShell)
+# Splitzo App Runner Script (PowerShell)
 # This script builds and runs the app without Flutter's auto-upgrade issues
 
 Write-Host "Cleaning old build..." -ForegroundColor Yellow
 flutter clean
 flutter pub get
 
-Write-Host "`nBuilding SplitSmart app..." -ForegroundColor Green
+Write-Host "`nBuilding Splitzo app..." -ForegroundColor Green
 Set-Location android
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 & .\gradlew.bat clean
