@@ -30,12 +30,39 @@ class _MembersScreenState extends State<MembersScreen> {
   List<Map<String, dynamic>> _cachedMembers = [];
   MemberFilter _selectedFilter = MemberFilter.all;
   bool _isSearching = false;
+  bool _isInitialized = false;
+  List<Map<String, dynamic>>? _cachedData;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load all members data once on init
+    _loadAllMembersData();
+  }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Load all members data once and cache it
+  Future<void> _loadAllMembersData() async {
+    if (_isInitialized) return;
+    
+    try {
+      final data = await _getMembersWithBalancesStream().first;
+      setState(() {
+        _allMembers = data;
+        _isInitialized = true;
+      });
+    } catch (e) {
+      print('Error loading members data: $e');
+      setState(() {
+        _isInitialized = true;
+      });
+    }
   }
 
   // Get all unique members from all groups the user is part of AND members created by user
@@ -289,66 +316,60 @@ class _MembersScreenState extends State<MembersScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Filter chips - Using StreamBuilder to get live counts
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _getMembersWithBalancesStream(),
-            builder: (context, snapshot) {
-              final allMembers = snapshot.data ?? [];
-              
-              // Update cache when data changes
-              if (snapshot.hasData) {
-                _allMembers = allMembers;
-              }
-              
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Row(
-                  children: [
-                    FilterChip(
-                      label: Text('All (${allMembers.length})'),
-                      selected: _selectedFilter == MemberFilter.all,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = MemberFilter.all;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      label: Text('Outstanding (${allMembers.where((m) => m['balance'] != 0).length})'),
-                      selected: _selectedFilter == MemberFilter.outstanding,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = MemberFilter.outstanding;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      label: Text('You owe (${allMembers.where((m) => (m['balance'] as double) < 0).length})'),
-                      selected: _selectedFilter == MemberFilter.youOwe,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = MemberFilter.youOwe;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      label: Text('They owe (${allMembers.where((m) => (m['balance'] as double) > 0).length})'),
-                      selected: _selectedFilter == MemberFilter.theyOwe,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = MemberFilter.theyOwe;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          // Filter chips - Using cached data for instant updates
+          if (_isInitialized)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: Text('All (${_allMembers.length})'),
+                    selected: _selectedFilter == MemberFilter.all,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedFilter = MemberFilter.all;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: Text('Outstanding (${_allMembers.where((m) => m['balance'] != 0).length})'),
+                    selected: _selectedFilter == MemberFilter.outstanding,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedFilter = MemberFilter.outstanding;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: Text('You owe (${_allMembers.where((m) => (m['balance'] as double) < 0).length})'),
+                    selected: _selectedFilter == MemberFilter.youOwe,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedFilter = MemberFilter.youOwe;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: Text('They owe (${_allMembers.where((m) => (m['balance'] as double) > 0).length})'),
+                    selected: _selectedFilter == MemberFilter.theyOwe,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedFilter = MemberFilter.theyOwe;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: SizedBox(height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
           // Search bar
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -379,8 +400,8 @@ class _MembersScreenState extends State<MembersScreen> {
                 // Cancel previous timer
                 _debounceTimer?.cancel();
                 
-                // Start new timer for debouncing (300ms delay)
-                _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                // Start new timer for debouncing (100ms delay - instant on cached data)
+                _debounceTimer = Timer(const Duration(milliseconds: 100), () {
                   setState(() {
                     _searchQuery = value;
                   });
@@ -388,215 +409,9 @@ class _MembersScreenState extends State<MembersScreen> {
               },
             ),
           ),
-          // Members list
+          // Members list - Using cached data with instant filtering and search
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _getMembersWithBalancesStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                        const SizedBox(height: 16),
-                        Text('Error: ${snapshot.error}'),
-                      ],
-                    ),
-                  );
-                }
-
-                final allMembers = snapshot.data ?? [];
-                
-                // Update cache when data changes
-                _allMembers = allMembers;
-          
-                // Apply current filter to the latest data
-                final filteredMembers = _filterMembers(_allMembers);
-
-          if (allMembers.isEmpty) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.people_outline,
-                      size: 80,
-                      color: isDark ? Colors.grey[600] : Colors.grey[400],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No members yet',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Create a group and add members to see them here',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? Colors.grey[500] : Colors.grey[500],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          if (filteredMembers.isEmpty) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.search_off,
-                    size: 64,
-                    color: isDark ? Colors.grey[600] : Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No members found',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Try a different search term',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.grey[500] : Colors.grey[500],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: filteredMembers.length,
-            padding: const EdgeInsets.all(8),
-            itemBuilder: (context, index) {
-              final memberData = filteredMembers[index];
-              final member = memberData['member'] as UserModel;
-              final balance = memberData['balance'] as double;
-              final currency = memberData['currency'] as String;
-
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: member.isRegistered
-                        ? Colors.green.shade100
-                        : Colors.orange.shade100,
-                    child: Text(
-                      member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        color: member.isRegistered
-                            ? Colors.green.shade900
-                            : Colors.orange.shade900,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  title: Text(member.name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (member.email.isNotEmpty)
-                        Text(
-                          member.email,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[500]
-                                : Colors.grey[600],
-                          ),
-                        ),
-                      if (member.phoneNumber.isNotEmpty)
-                        Text(
-                          member.phoneNumber,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[500]
-                                : Colors.grey[600],
-                          ),
-                        ),
-                      const SizedBox(height: 4),
-                      // Balance display
-                      if (balance != 0)
-                        Row(
-                          children: [
-                            Icon(
-                              balance > 0 ? Icons.arrow_downward : Icons.arrow_upward,
-                              size: 14,
-                              color: balance > 0 ? Colors.green : Colors.red,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              balance > 0
-                                  ? 'owes you ${AppConstants.formatAmount(balance.abs(), currency)}'
-                                  : 'you owe ${AppConstants.formatAmount(balance.abs(), currency)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: balance > 0 ? Colors.green[700] : Colors.red[700],
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        Text(
-                          'Settled up',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (balance != 0)
-                        Text(
-                          AppConstants.formatAmount(balance.abs(), currency),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: balance > 0 ? Colors.green[700] : Colors.red[700],
-                          ),
-                        ),
-                      if (member.isRegistered)
-                        Icon(Icons.verified, size: 14, color: Colors.green[700])
-                      else
-                        Icon(Icons.person_outline, size: 14, color: Colors.orange[700]),
-                    ],
-                  ),
-                  onTap: () => _showMemberDetails(member),
-                  isThreeLine: true,
-                ),
-              );
-            },
-          );
-              },
-            ),
+            child: _buildMembersList(),
           ),
         ],
       ),
@@ -612,6 +427,193 @@ class _MembersScreenState extends State<MembersScreen> {
         icon: const Icon(Icons.person_add),
         label: const Text('Add Member'),
       ),
+    );
+  }
+
+  Widget _buildMembersList() {
+    if (!_isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Apply current filter and search to cached data
+    final filteredMembers = _filterMembers(_allMembers);
+
+    if (_allMembers.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.people_outline,
+                size: 80,
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No members yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Create a group and add members to see them here',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey[500] : Colors.grey[500],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (filteredMembers.isEmpty) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: isDark ? Colors.grey[600] : Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No members found',
+              style: TextStyle(
+                fontSize: 18,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Try a different search term',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey[500] : Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: filteredMembers.length,
+      padding: const EdgeInsets.all(8),
+      itemBuilder: (context, index) {
+        final memberData = filteredMembers[index];
+        final member = memberData['member'] as UserModel;
+        final balance = memberData['balance'] as double;
+        final currency = memberData['currency'] as String;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: member.isRegistered
+                  ? Colors.green.shade100
+                  : Colors.orange.shade100,
+              child: Text(
+                member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: member.isRegistered
+                      ? Colors.green.shade900
+                      : Colors.orange.shade900,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            title: Text(member.name),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (member.email.isNotEmpty)
+                  Text(
+                    member.email,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[500]
+                          : Colors.grey[600],
+                    ),
+                  ),
+                if (member.phoneNumber.isNotEmpty)
+                  Text(
+                    member.phoneNumber,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[500]
+                          : Colors.grey[600],
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                // Balance display
+                if (balance != 0)
+                  Row(
+                    children: [
+                      Icon(
+                        balance > 0 ? Icons.arrow_downward : Icons.arrow_upward,
+                        size: 14,
+                        color: balance > 0 ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        balance > 0
+                            ? 'owes you ${AppConstants.formatAmount(balance.abs(), currency)}'
+                            : 'you owe ${AppConstants.formatAmount(balance.abs(), currency)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: balance > 0 ? Colors.green[700] : Colors.red[700],
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    'Settled up',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+              ],
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (balance != 0)
+                  Text(
+                    AppConstants.formatAmount(balance.abs(), currency),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: balance > 0 ? Colors.green[700] : Colors.red[700],
+                    ),
+                  ),
+                if (member.isRegistered)
+                  Icon(Icons.verified, size: 14, color: Colors.green[700])
+                else
+                  Icon(Icons.person_outline, size: 14, color: Colors.orange[700]),
+              ],
+            ),
+            onTap: () => _showMemberDetails(member),
+            isThreeLine: true,
+          ),
+        );
+      },
     );
   }
 }
