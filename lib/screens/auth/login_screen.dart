@@ -426,7 +426,6 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> with Singl
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
-                            labelText: 'Email',
                             hintText: 'Enter your email',
                             prefixIcon: Icon(Icons.email),
                             border: OutlineInputBorder(),
@@ -483,7 +482,6 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> with Singl
                                 controller: _phoneController,
                                 keyboardType: TextInputType.phone,
                                 decoration: const InputDecoration(
-                                  labelText: 'Phone Number',
                                   hintText: 'Enter phone number',
                                   border: OutlineInputBorder(),
                                 ),
