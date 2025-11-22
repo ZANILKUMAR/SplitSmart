@@ -374,6 +374,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('\n==== GroupDetailsScreen.build() ====');
+    print('_isLoading: $_isLoading, _group: ${_group?.name}, _members: ${_members.length}');
+    
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Group Details')),
@@ -418,11 +421,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadGroupDetails,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
             // Group Info Card
             Card(
               child: Padding(
@@ -449,7 +450,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           ),
                           child: Icon(
                             _group!.iconCodePoint != null
-                                ? IconData(_group!.iconCodePoint!)
+                                ? IconData(_group!.iconCodePoint!, fontFamily: 'MaterialIcons')
                                 : Icons.group,
                             size: 32,
                             color: Color(
@@ -1166,7 +1167,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             ),
           ],
         ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final result = await Navigator.push(

@@ -59,7 +59,8 @@ class _EditGroupScreenState extends State<EditGroupScreen> {
     );
     // Load icon and color from existing group
     _selectedIcon = widget.group.iconCodePoint != null
-        ? IconData(widget.group.iconCodePoint!)
+        ? IconData(widget.group.iconCodePoint!,
+            fontFamily: 'MaterialIcons')
         : Icons.group;
     _selectedColor = widget.group.colorValue != null
         ? Color(widget.group.colorValue!)

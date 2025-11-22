@@ -424,7 +424,8 @@ class _GroupCardState extends State<_GroupCard> {
                     ),
                     child: Icon(
                       widget.group.iconCodePoint != null
-                          ? IconData(widget.group.iconCodePoint!)
+                          ? IconData(widget.group.iconCodePoint!,
+                              fontFamily: 'MaterialIcons')
                           : Icons.group,
                       color: widget.group.colorValue != null
                           ? Color(widget.group.colorValue!)
@@ -519,7 +520,7 @@ class _GroupCardState extends State<_GroupCard> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.arrow_downward,
                                       size: 16,
                                       color: Colors.green,
@@ -558,7 +559,7 @@ class _GroupCardState extends State<_GroupCard> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.arrow_upward,
                                       size: 16,
                                       color: Colors.red,
